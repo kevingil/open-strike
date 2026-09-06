@@ -1,5 +1,6 @@
 use super::{style::*, MenuPage, MenuTab, PlayerLoadout, WeaponId};
 use crate::game::{
+    config::PRESET_GRENADES,
     player::skins::{SkinId, SkinRegistry},
     GameState,
 };
@@ -17,6 +18,7 @@ enum Category {
     Everything,
     Weapons,
     Characters,
+    Grenades,
 }
 
 #[derive(Component)]
@@ -90,6 +92,7 @@ fn setup(mut commands: Commands, server: Res<AssetServer>, skins: Res<SkinRegist
                     (Category::Everything, "EVERYTHING"),
                     (Category::Weapons, "WEAPONS"),
                     (Category::Characters, "CHARACTERS"),
+                    (Category::Grenades, "GRENADES"),
                 ] {
                     tabs.spawn((
                         CategoryButton(category),
@@ -208,10 +211,41 @@ fn setup(mut commands: Commands, server: Res<AssetServer>, skins: Res<SkinRegist
                                 card.spawn((item, label("", 12., ACCENT)));
                             });
                         }
+                        for name in PRESET_GRENADES {
+                            grid.spawn((
+                                InventoryCard(Category::Grenades),
+                                Node {
+                                    width: Val::Px(200.),
+                                    max_width: Val::Percent(100.),
+                                    flex_direction: FlexDirection::Column,
+                                    row_gap: Val::Px(5.),
+                                    ..default()
+                                },
+                            ))
+                            .with_children(|card| {
+                                // Preset information only; no item model or edit action exists yet.
+                                card.spawn((
+                                    Node {
+                                        width: Val::Percent(100.),
+                                        aspect_ratio: Some(4. / 3.),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        border: UiRect::bottom(Val::Px(3.)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgba(0.42, 0.45, 0.48, 0.74)),
+                                    BorderColor(Color::srgb(0.46, 0.63, 0.71)),
+                                ))
+                                .with_child(label("PRESET", 20., MUTED));
+                                card.spawn(label(name, 17., WHITE));
+                                card.spawn(label("Grenade · Fixed selection", 13., MUTED));
+                                card.spawn(label("Not customizable", 12., ACCENT));
+                            });
+                        }
                     });
             });
             root.spawn((
-                label("Equip characters in Load Out", 13., MUTED),
+                label("Choose weapons available to buy in Load Out", 13., MUTED),
                 Node {
                     margin: UiRect::axes(Val::VMin(5.), Val::Px(18.)),
                     flex_shrink: 0.,
