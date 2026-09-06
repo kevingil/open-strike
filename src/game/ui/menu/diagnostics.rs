@@ -1,9 +1,9 @@
 //! Opt-in native scenario: exercises menu handlers without OS input injection.
 use super::{
-    friends_drawer::DrawerState, home_scene::HomeSceneEntity, loadout_tab::SkinButton,
+    friends_drawer::DrawerState, home_scene::HomeSceneEntity, loadout_tab::LoadoutButton,
     nav_bar::NavButton, play_tab::StartGameButton, MenuTab,
 };
-use crate::game::{matchplay::Combatant, player::skins::SkinId, GameState};
+use crate::game::{matchplay::Combatant, player::skins::PlayerSide, GameState};
 use bevy::{
     prelude::*,
     render::view::screenshot::{save_to_disk, Screenshot},
@@ -46,7 +46,7 @@ fn run(
     mut scenario: ResMut<Scenario>,
     mut nav: Query<(&NavButton, &mut Interaction)>,
     mut skins: Query<
-        (&SkinButton, &mut Interaction),
+        (&LoadoutButton, &mut Interaction),
         (Without<NavButton>, Without<StartGameButton>),
     >,
     mut starts: Query<&mut Interaction, (With<StartGameButton>, Without<NavButton>)>,
@@ -106,7 +106,7 @@ fn run(
         5 => tab(MenuTab::LoadOut),
         6 => {
             for (skin, mut interaction) in &mut skins {
-                if skin.0 == SkinId::Police {
+                if matches!(skin, LoadoutButton::Side(PlayerSide::Defender)) {
                     *interaction = Interaction::Pressed;
                 }
             }
@@ -118,7 +118,7 @@ fn run(
             }
             tab(MenuTab::Home);
         }
-        9 => capture(&mut commands, "defender"),
+        9 => capture(&mut commands, "home-after-loadout"),
         10 => tab(MenuTab::Settings),
         11 => capture(&mut commands, "settings"),
         12 => tab(MenuTab::Play),
@@ -169,7 +169,9 @@ fn run(
             assert_eq!(*game.get(), GameState::Playing);
             assert_eq!(actors.iter().count(), 6);
             assert!(menu_entities.is_empty());
-            info!("MENU_SCENARIO passed: browse, equip, Play, pause/resume, return, restart");
+            info!(
+                "MENU_SCENARIO passed: browse, edit loadout, Play, pause/resume, return, restart"
+            );
             exit.write(AppExit::Success);
         }
         _ => return,
