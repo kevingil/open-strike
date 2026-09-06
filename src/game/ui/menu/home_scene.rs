@@ -407,7 +407,7 @@ fn showcase_visibility(
     mut models: Query<&mut Visibility, With<HomePlayerModel>>,
 ) {
     for mut visibility in &mut models {
-        *visibility = if *tab.get() == super::MenuTab::Play {
+        *visibility = if matches!(*tab.get(), super::MenuTab::Play | super::MenuTab::LoadOut) {
             Visibility::Hidden
         } else {
             Visibility::Inherited

@@ -110,7 +110,7 @@ fn sync_glass(
                 0.
             } else if matches!(
                 *tab.get(),
-                MenuTab::Play | MenuTab::Inventory | MenuTab::Settings
+                MenuTab::Play | MenuTab::Inventory | MenuTab::LoadOut | MenuTab::Settings
             ) {
                 size.y
             } else {
