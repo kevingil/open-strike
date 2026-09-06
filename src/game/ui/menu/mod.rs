@@ -10,6 +10,7 @@ mod glass;
 pub mod home_scene;
 pub mod home_tab;
 pub mod inventory_tab;
+mod loadout_scene;
 pub mod loadout_tab;
 pub mod nav_bar;
 pub mod play_tab;
