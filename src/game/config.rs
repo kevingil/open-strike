@@ -1,4 +1,4 @@
-use crate::game::player::skins::SkinId;
+use crate::game::player::skins::{PlayerSide, SkinId};
 use bevy::prelude::*;
 use std::time::Duration;
 
@@ -125,6 +125,8 @@ pub struct PlayerLoadout {
     pub primary_weapon: WeaponId,
     pub selected_skin: SkinId,
     pub melee_weapon: WeaponId,
+    /// Weapons offered for purchase, independent of the currently held weapon.
+    pub buy_weapons: BuyLoadouts,
 }
 
 impl Default for PlayerLoadout {
@@ -133,6 +135,120 @@ impl Default for PlayerLoadout {
             primary_weapon: WeaponId::AK47,
             melee_weapon: WeaponId::DefaultKnife,
             selected_skin: SkinId::default(),
+            buy_weapons: BuyLoadouts::default(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuyCategory {
+    Pistols,
+    MidTier,
+    Rifles,
+}
+
+impl BuyCategory {
+    pub const ALL: [Self; 3] = [Self::Pistols, Self::MidTier, Self::Rifles];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Pistols => "Pistols",
+            Self::MidTier => "Mid-Tier",
+            Self::Rifles => "Rifles",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Pistols => "Secondary weapons",
+            Self::MidTier => "SMGs and shotguns",
+            Self::Rifles => "Rifles and snipers",
+        }
+    }
+
+    pub fn accepts(self, weapon: WeaponId) -> bool {
+        // Expand this catalog when additional weapons are implemented.
+        matches!((self, weapon), (Self::Rifles, WeaponId::AK47))
+    }
+}
+
+pub const BUY_SLOT_COUNT: usize = 5;
+pub const PRESET_ARMOR: [&str; 2] = ["Kevlar vest", "Kevlar + helmet"];
+pub const PRESET_GRENADES: [&str; 5] = [
+    "Flashbang",
+    "Smoke grenade",
+    "HE grenade",
+    "Incendiary grenade",
+    "Decoy grenade",
+];
+
+#[derive(Clone)]
+pub struct SideBuyLoadout {
+    pistols: [Option<WeaponId>; BUY_SLOT_COUNT],
+    mid_tier: [Option<WeaponId>; BUY_SLOT_COUNT],
+    rifles: [Option<WeaponId>; BUY_SLOT_COUNT],
+}
+
+impl Default for SideBuyLoadout {
+    fn default() -> Self {
+        Self {
+            pistols: [None; BUY_SLOT_COUNT],
+            mid_tier: [None; BUY_SLOT_COUNT],
+            rifles: [Some(WeaponId::AK47), None, None, None, None],
+        }
+    }
+}
+
+impl SideBuyLoadout {
+    pub fn slots(&self, category: BuyCategory) -> &[Option<WeaponId>; BUY_SLOT_COUNT] {
+        match category {
+            BuyCategory::Pistols => &self.pistols,
+            BuyCategory::MidTier => &self.mid_tier,
+            BuyCategory::Rifles => &self.rifles,
+        }
+    }
+
+    pub fn set(&mut self, category: BuyCategory, index: usize, weapon: Option<WeaponId>) {
+        if index >= BUY_SLOT_COUNT || weapon.is_some_and(|weapon| !category.accepts(weapon)) {
+            return;
+        }
+        let slots = match category {
+            BuyCategory::Pistols => &mut self.pistols,
+            BuyCategory::MidTier => &mut self.mid_tier,
+            BuyCategory::Rifles => &mut self.rifles,
+        };
+        // A weapon occupies one purchase slot per category, even when moved.
+        if weapon.is_some() {
+            for slot in slots.iter_mut() {
+                if *slot == weapon {
+                    *slot = None;
+                }
+            }
+        }
+        slots[index] = weapon;
+    }
+}
+
+#[derive(Default)]
+pub struct BuyLoadouts {
+    pub attacker: SideBuyLoadout,
+    pub defender: SideBuyLoadout,
+}
+
+impl BuyLoadouts {
+    pub fn side(&self, side: PlayerSide) -> &SideBuyLoadout {
+        if side == PlayerSide::Defender {
+            &self.defender
+        } else {
+            &self.attacker
+        }
+    }
+
+    pub fn side_mut(&mut self, side: PlayerSide) -> &mut SideBuyLoadout {
+        if side == PlayerSide::Defender {
+            &mut self.defender
+        } else {
+            &mut self.attacker
         }
     }
 }
