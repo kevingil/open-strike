@@ -1,385 +1,374 @@
-//! Full-body animation system for player models using Mixamo animations.
-//!
-//! Uses complete body animations (not split upper/lower) for smooth transitions.
-//! All player skins share the same Mixamo skeleton and animations.
-
+use super::{player_model::PlayerModel, skins::SkinId};
+use crate::game::{
+    assets::GameAssets, config::WeaponId, matchplay::Combatant, weapons::WeaponState,
+};
+use bevy::prelude::*;
+use bevy_fps_controller::controller::{FpsController, FpsControllerInput};
+use bevy_rapier3d::prelude::Velocity;
 use std::time::Duration;
 
-use bevy::prelude::*;
-use bevy_rapier3d::prelude::*;
-use bevy_fps_controller::controller::LogicalPlayer;
-
-use super::player_model::PlayerModel;
-
-// ============================================================================
-// ANIMATION STATE
-// ============================================================================
-
-/// Player animation state - determines which full-body animation to play
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub enum AnimationState {
-    #[default]
-    Idle,
-    Walking,
-    WalkingBackward,
-    Running,
-    RunningBackward,
-    StrafeLeft,
-    StrafeRight,
-    Firing,
-    Jumping,
-    JumpingBackward,
-    Dying,
-}
-
-impl AnimationState {
-    /// Whether this animation should loop
-    pub fn should_loop(&self) -> bool {
-        match self {
-            AnimationState::Idle => true,
-            AnimationState::Walking => true,
-            AnimationState::WalkingBackward => true,
-            AnimationState::Running => true,
-            AnimationState::RunningBackward => true,
-            AnimationState::StrafeLeft => true,
-            AnimationState::StrafeRight => true,
-            AnimationState::Firing => false,
-            AnimationState::Jumping => false,
-            AnimationState::JumpingBackward => false,
-            AnimationState::Dying => false,
-        }
-    }
-}
-
-// ============================================================================
-// ANIMATION CONFIG
-// ============================================================================
-
-/// Path to the animation model containing all animations.
-pub const ANIMATION_MODEL_PATH: &str = "models/skins/shooter.glb";
-
-/// Maximum number of animations to attempt loading from the GLB.
-/// Animations are loaded by index 0..MAX_ANIMATION_COUNT.
-pub const MAX_ANIMATION_COUNT: usize = 50;
-
-// ============================================================================
-// SHARED ANIMATIONS RESOURCE
-// ============================================================================
-
-/// Shared animation data - loaded once, used by all players.
-/// Animations are stored dynamically by index.
-#[derive(Resource)]
+pub const CLIP_NAMES: &[&str] = &[
+    "idle_rifle",
+    "walk_forward",
+    "walk_backward",
+    "run_forward",
+    "strafe_left",
+    "strafe_right",
+    "fire_rifle",
+    "reload_rifle",
+    "jump",
+    "crouch_idle",
+    "crouch_walk",
+    "death",
+];
+#[derive(Component)]
+pub struct CharacterRig(pub SkinId);
+/// Full-body menu playback, excluded from gameplay masking.
+#[derive(Component)]
+pub struct ShowcaseAnimation;
+#[derive(Resource, Default)]
 pub struct SharedAnimations {
-    /// The animation graph handle
     pub graph: Handle<AnimationGraph>,
-    /// All animation node indices (index 0 = first animation in GLB)
     pub nodes: Vec<AnimationNodeIndex>,
-    /// Total number of animations loaded
     pub count: usize,
+    profiles: Vec<Handle<AnimationGraph>>,
+    showcase: Vec<(Handle<AnimationGraph>, AnimationNodeIndex)>,
+    lower: Vec<AnimationNodeIndex>,
+    upper: Vec<AnimationNodeIndex>,
 }
-
 impl SharedAnimations {
-    /// Get animation node by index, returns first animation if out of bounds
     pub fn get_by_index(&self, index: usize) -> AnimationNodeIndex {
-        self.nodes.get(index).copied().unwrap_or_else(|| {
-            self.nodes.first().copied().unwrap_or(AnimationNodeIndex::new(0))
-        })
-    }
-
-    /// Get the animation node for a given gameplay state.
-    /// Uses index 0 as fallback for all states until proper mapping is configured.
-    pub fn get_node(&self, state: AnimationState) -> AnimationNodeIndex {
-        // Default mapping - adjust these indices based on your shooter.glb animation order
-        let index = match state {
-            AnimationState::Idle => 0,
-            AnimationState::Walking => 1.min(self.count.saturating_sub(1)),
-            AnimationState::WalkingBackward => 2.min(self.count.saturating_sub(1)),
-            AnimationState::Running => 3.min(self.count.saturating_sub(1)),
-            AnimationState::RunningBackward => 4.min(self.count.saturating_sub(1)),
-            AnimationState::StrafeLeft => 5.min(self.count.saturating_sub(1)),
-            AnimationState::StrafeRight => 6.min(self.count.saturating_sub(1)),
-            AnimationState::Firing => 7.min(self.count.saturating_sub(1)),
-            AnimationState::Jumping => 8.min(self.count.saturating_sub(1)),
-            AnimationState::JumpingBackward => 9.min(self.count.saturating_sub(1)),
-            AnimationState::Dying => 10.min(self.count.saturating_sub(1)),
-        };
-        self.get_by_index(index)
+        self.nodes
+            .get(index)
+            .copied()
+            .unwrap_or(AnimationNodeIndex::new(0))
     }
 }
-
-// ============================================================================
-// PLAYER ANIMATION CONTROLLER
-// ============================================================================
-
-/// Per-player animation controller component.
 #[derive(Component)]
 pub struct PlayerAnimationController {
-    /// Current animation state
-    pub state: AnimationState,
-    /// Previous state for change detection
-    pub prev_state: AnimationState,
-    /// Animation player entity reference
     pub animation_player_entity: Option<Entity>,
-    /// Timer for one-shot animations (firing, etc.)
-    pub action_timer: f32,
+    pub state: usize,
+    previous: usize,
+    pub action: u64,
+    previous_action: u64,
+    locomotion: usize,
+    previous_locomotion: usize,
 }
-
 impl Default for PlayerAnimationController {
     fn default() -> Self {
         Self {
-            state: AnimationState::Idle,
-            prev_state: AnimationState::Idle,
             animation_player_entity: None,
-            action_timer: 0.0,
+            state: 0,
+            previous: usize::MAX,
+            action: 0,
+            previous_action: 0,
+            locomotion: 0,
+            previous_locomotion: usize::MAX,
         }
     }
 }
 
-impl PlayerAnimationController {
-    /// Check if state changed
-    pub fn state_changed(&self) -> bool {
-        self.state != self.prev_state
-    }
+pub fn load_shared_animations(mut commands: Commands) {
+    commands.init_resource::<SharedAnimations>();
 }
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-/// Velocity thresholds for movement detection
-const IDLE_THRESHOLD: f32 = 0.5;
-const WALK_THRESHOLD: f32 = 4.0;
-
-/// Animation transition blend duration
-const BLEND_DURATION: f32 = 0.15;
-
-/// Fire animation duration
-const FIRE_DURATION: f32 = 0.3;
-
-// ============================================================================
-// SYSTEMS
-// ============================================================================
-
-/// Load shared animations from the animation model.
-/// Dynamically loads all available animations up to MAX_ANIMATION_COUNT.
-pub fn load_shared_animations(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
+pub fn prepare_graphs(
+    assets: Option<Res<GameAssets>>,
+    gltfs: Res<Assets<Gltf>>,
+    scenes: Res<Assets<Scene>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    mut shared: ResMut<SharedAnimations>,
 ) {
-    // Load animation clips dynamically - try loading up to MAX_ANIMATION_COUNT
-    let clips: Vec<Handle<AnimationClip>> = (0..MAX_ANIMATION_COUNT)
-        .map(|i| asset_server.load(GltfAssetLabel::Animation(i).from_asset(ANIMATION_MODEL_PATH)))
-        .collect();
-
-    let count = clips.len();
-    println!("[DEBUG] Loading {} animation clips from {}", count, ANIMATION_MODEL_PATH);
-
-    // Build animation graph from all clips
-    let (graph, indices) = AnimationGraph::from_clips(clips);
-    let graph_handle = graphs.add(graph);
-
-    // Store all node indices
-    let nodes: Vec<AnimationNodeIndex> = indices.into_iter().collect();
-
-    commands.insert_resource(SharedAnimations {
-        graph: graph_handle,
-        nodes,
-        count,
-    });
-}
-
-/// Detect animation state based on player input and velocity.
-pub fn detect_animation_state(
-    time: Res<Time>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    mut controller_query: Query<(&mut PlayerAnimationController, &PlayerModel)>,
-    velocity_query: Query<&Velocity, With<LogicalPlayer>>,
-) {
-    for (mut controller, player_model) in &mut controller_query {
-        let delta = time.delta_secs();
-        
-        // Store previous state
-        controller.prev_state = controller.state;
-        
-        // Update action timer
-        if controller.action_timer > 0.0 {
-            controller.action_timer -= delta;
-        }
-        
-        // Check for firing (takes priority)
-        if mouse.just_pressed(MouseButton::Left) {
-            controller.state = AnimationState::Firing;
-            controller.action_timer = FIRE_DURATION;
-            continue;
-        }
-        
-        // If in one-shot animation, wait for it to finish
-        if controller.action_timer > 0.0 {
-            continue;
-        }
-        
-        // Get velocity for movement detection
-        let Ok(velocity) = velocity_query.get(player_model.logical_entity) else {
-            controller.state = AnimationState::Idle;
-            continue;
+    if shared.count > 0 {
+        return;
+    }
+    let Some(assets) = assets else {
+        return;
+    };
+    let mut profiles = Vec::new();
+    let mut showcase = Vec::new();
+    let mut nodes = Vec::new();
+    let mut lower = Vec::new();
+    let mut upper = Vec::new();
+    for (profile_index, handle) in assets.skins.iter().enumerate() {
+        let Some(gltf) = gltfs.get(handle) else {
+            return;
         };
-        
-        let horizontal_vel = Vec2::new(velocity.linvel.x, velocity.linvel.z);
-        let speed = horizontal_vel.length();
-        
-        // Determine movement state based on velocity and input
-        if speed < IDLE_THRESHOLD {
-            controller.state = AnimationState::Idle;
-        } else {
-            // Check movement direction based on input
-            let moving_forward = keyboard.pressed(KeyCode::KeyW);
-            let moving_backward = keyboard.pressed(KeyCode::KeyS);
-            let moving_left = keyboard.pressed(KeyCode::KeyA);
-            let moving_right = keyboard.pressed(KeyCode::KeyD);
-            let is_running = speed >= WALK_THRESHOLD;
-            
-            if moving_left && !moving_right {
-                controller.state = AnimationState::StrafeLeft;
-            } else if moving_right && !moving_left {
-                controller.state = AnimationState::StrafeRight;
-            } else if moving_backward && !moving_forward {
-                controller.state = if is_running {
-                    AnimationState::RunningBackward
-                } else {
-                    AnimationState::WalkingBackward
+        let Some(clips) = CLIP_NAMES
+            .iter()
+            .map(|name| gltf.named_animations.get(*name).cloned())
+            .collect::<Option<Vec<_>>>()
+        else {
+            return;
+        };
+        let Some(scene) = scenes.get(&gltf.scenes[0]) else {
+            return;
+        };
+        let (mut graph, indices) = AnimationGraph::from_clips(clips.clone());
+        nodes = indices;
+        for entity in scene.world.iter_entities() {
+            let Some(target) = entity.get::<bevy::animation::AnimationTarget>() else {
+                continue;
+            };
+            let mut current = entity.id();
+            let mut is_upper = false;
+            loop {
+                if scene
+                    .world
+                    .get::<Name>(current)
+                    .is_some_and(|n| n.as_str() == "mixamorig:Spine")
+                {
+                    is_upper = true;
+                    break;
+                }
+                let Some(parent) = scene.world.get::<ChildOf>(current) else {
+                    break;
                 };
-            } else {
-                controller.state = if is_running {
-                    AnimationState::Running
-                } else {
-                    AnimationState::Walking
-                };
+                current = parent.parent();
             }
+            graph.add_target_to_mask_group(target.id, if is_upper { 0 } else { 1 });
         }
+        lower = clips
+            .iter()
+            .map(|clip| graph.add_clip_with_mask(clip.clone(), 1, 1.0, graph.root))
+            .collect();
+        upper = [6, 7, 0]
+            .iter()
+            .map(|index| graph.add_clip_with_mask(clips[*index].clone(), 2, 1.0, graph.root))
+            .collect();
+        let Some(knife) = gltfs.get(&assets.knife_poses[profile_index]) else {
+            return;
+        };
+        for name in ["idle_knife", "slash_knife", "draw_knife"] {
+            let Some(clip) = knife.named_animations.get(name) else {
+                return;
+            };
+            upper.push(graph.add_clip_with_mask(clip.clone(), 2, 1.0, graph.root));
+        }
+        let clip = gltf
+            .named_animations
+            .get("menu_hold_rifle")
+            .cloned()
+            .unwrap_or_else(|| {
+                warn!("Missing menu_hold_rifle: showcase using rifle idle fallback");
+                clips[0].clone()
+            });
+        let (menu_graph, menu_node) = AnimationGraph::from_clip(clip);
+        showcase.push((graphs.add(menu_graph), menu_node));
+        profiles.push(graphs.add(graph));
     }
+    shared.graph = profiles[0].clone();
+    shared.nodes = nodes;
+    shared.count = CLIP_NAMES.len();
+    shared.profiles = profiles;
+    shared.showcase = showcase;
+    shared.lower = lower;
+    shared.upper = upper;
 }
 
-/// Update animation players based on state changes.
-pub fn update_player_animations(
-    shared_animations: Option<Res<SharedAnimations>>,
-    controller_query: Query<&PlayerAnimationController, Changed<PlayerAnimationController>>,
-    mut animation_player_query: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
-) {
-    let Some(animations) = shared_animations else {
-        return;
-    };
-
-    for controller in &controller_query {
-        let Some(anim_entity) = controller.animation_player_entity else {
-            continue;
-        };
-
-        let Ok((mut player, mut transitions)) = animation_player_query.get_mut(anim_entity) else {
-            continue;
-        };
-
-        // Get the target animation node
-        let target_node = animations.get_node(controller.state);
-        
-        // Play the animation with smooth transition
-        let transition = transitions.play(
-            &mut player,
-            target_node,
-            Duration::from_secs_f32(BLEND_DURATION),
-        );
-        
-        // Loop if appropriate
-        if controller.state.should_loop() {
-            transition.repeat();
-        }
-    }
-}
-
-/// Setup animation player for newly spawned player models.
 pub fn setup_animation_player(
-    shared_animations: Option<Res<SharedAnimations>>,
     mut commands: Commands,
-    mut animation_player_query: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
-    parent_query: Query<&ChildOf>,
-    mut player_model_query: Query<(Entity, &mut PlayerAnimationController), With<PlayerModel>>,
+    shared: Res<SharedAnimations>,
+    parents: Query<&ChildOf>,
+    mut animations: Query<(Entity, &mut AnimationPlayer)>,
+    mut roots: Query<(
+        Entity,
+        &CharacterRig,
+        &mut PlayerAnimationController,
+        Option<&ShowcaseAnimation>,
+    )>,
 ) {
-    let Some(animations) = shared_animations else {
+    if shared.count == 0 {
         return;
-    };
-
-    for (anim_entity, mut player) in &mut animation_player_query {
-        // Walk up hierarchy to find PlayerModel
-        let mut current = anim_entity;
-        let mut found_player_model: Option<Entity> = None;
-        
-        while let Ok(parent) = parent_query.get(current) {
-            let parent_entity = parent.parent();
-            for (pm_entity, _) in &player_model_query {
-                if pm_entity == parent_entity {
-                    found_player_model = Some(pm_entity);
+    }
+    for (root, rig, mut controller, showcase) in &mut roots {
+        if controller.animation_player_entity.is_some() {
+            continue;
+        }
+        for (entity, mut player) in &mut animations {
+            let mut current = entity;
+            while let Ok(parent) = parents.get(current) {
+                current = parent.parent();
+                if current == root {
+                    let profile = if rig.0 == SkinId::Soldier { 0 } else { 1 };
+                    commands.entity(entity).insert((
+                        AnimationGraphHandle(if showcase.is_some() {
+                            shared.showcase[profile].0.clone()
+                        } else {
+                            shared.profiles[profile].clone()
+                        }),
+                        AnimationTransitions::new(),
+                    ));
+                    if showcase.is_some() {
+                        player.stop_all();
+                        player.play(shared.showcase[profile].1).repeat();
+                    }
+                    controller.animation_player_entity = Some(entity);
                     break;
                 }
             }
-            if found_player_model.is_some() {
+            if controller.animation_player_entity.is_some() {
                 break;
             }
-            current = parent_entity;
         }
+    }
+}
 
-        let Some(player_model_entity) = found_player_model else {
+pub fn detect_animation_state(
+    mut models: Query<(&mut PlayerAnimationController, Option<&PlayerModel>)>,
+    actors: Query<(
+        &Combatant,
+        &Velocity,
+        &FpsController,
+        &FpsControllerInput,
+        &WeaponState,
+    )>,
+) {
+    for (mut animation, model) in &mut models {
+        let Some(model) = model else {
             continue;
         };
-
-        // Store animation player reference
-        if let Ok((_, mut controller)) = player_model_query.get_mut(player_model_entity) {
-            controller.animation_player_entity = Some(anim_entity);
-        }
-
-        // Initialize with first animation (idle)
-        let mut transitions = AnimationTransitions::new();
-        transitions
-            .play(&mut player, animations.get_by_index(0), Duration::from_secs_f32(BLEND_DURATION))
-            .repeat();
-
-        commands.entity(anim_entity).insert((
-            AnimationGraphHandle(animations.graph.clone()),
-            transitions,
-        ));
+        let Ok((actor, velocity, controller, input, weapon)) = actors.get(model.logical_entity)
+        else {
+            continue;
+        };
+        let speed = velocity.linvel.xz().length();
+        animation.action = if weapon.active == WeaponId::DefaultKnife {
+            weapon.slashes
+        } else {
+            weapon.shots
+        };
+        animation.locomotion = if controller.ground_tick == 0 && velocity.linvel.y.abs() > 0.7 {
+            8
+        } else if input.crouch {
+            if speed > 0.3 {
+                10
+            } else {
+                9
+            }
+        } else if speed < 0.3 {
+            0
+        } else if input.movement.x < -0.2 {
+            4
+        } else if input.movement.x > 0.2 {
+            5
+        } else if input.movement.z < -0.2 {
+            2
+        } else if input.sprint {
+            3
+        } else {
+            1
+        };
+        animation.state = if !actor.alive() {
+            11
+        } else if weapon.active == WeaponId::DefaultKnife {
+            if weapon.equip_remaining > 0.0 {
+                14
+            } else if weapon.knife_remaining > 0.0 {
+                13
+            } else {
+                12
+            }
+        } else if weapon.reload_remaining > 0.0 {
+            7
+        } else if weapon.flash_remaining > 0.0 {
+            6
+        } else {
+            animation.locomotion
+        };
     }
 }
-
-// ============================================================================
-// LEGACY COMPATIBILITY (for other modules that may reference old types)
-// ============================================================================
-
-/// Weapon types (kept for compatibility with other systems)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub enum WeaponType {
-    #[default]
-    Rifle,
-    Pistol,
-    Sniper,
-    Knife,
-}
-
-impl WeaponType {
-    pub fn reload_duration(&self) -> f32 {
-        match self {
-            WeaponType::Rifle => 2.5,
-            WeaponType::Pistol => 1.8,
-            WeaponType::Sniper => 3.5,
-            WeaponType::Knife => 0.0,
-        }
+pub fn update_player_animations(
+    shared: Res<SharedAnimations>,
+    mut controllers: Query<&mut PlayerAnimationController, Without<ShowcaseAnimation>>,
+    mut players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
+) {
+    if shared.count == 0 {
+        return;
     }
-
-    pub fn fire_cooldown(&self) -> f32 {
-        match self {
-            WeaponType::Rifle => 0.1,
-            WeaponType::Pistol => 0.15,
-            WeaponType::Sniper => 1.5,
-            WeaponType::Knife => 0.5,
+    for mut controller in &mut controllers {
+        let Some(entity) = controller.animation_player_entity else {
+            continue;
+        };
+        if controller.state == controller.previous
+            && controller.locomotion == controller.previous_locomotion
+            && (![6, 13].contains(&controller.state)
+                || controller.action == controller.previous_action)
+        {
+            continue;
         }
+        let Ok((mut player, mut transitions)) = players.get_mut(entity) else {
+            continue;
+        };
+        let masked = ![8, 11].contains(&controller.state);
+        let was_masked =
+            controller.previous != usize::MAX && ![8, 11].contains(&controller.previous);
+        if masked {
+            if !was_masked {
+                player.stop_all();
+                *transitions = AnimationTransitions::new();
+            }
+            if !was_masked || controller.locomotion != controller.previous_locomotion {
+                if was_masked {
+                    player.stop(shared.lower[controller.previous_locomotion]);
+                }
+                let active = player.play(shared.lower[controller.locomotion]);
+                if controller.locomotion != 8 {
+                    active.repeat();
+                }
+            }
+            let upper_index = |state| {
+                if state >= 12 {
+                    state - 9
+                } else if state == 6 {
+                    0
+                } else if state == 7 {
+                    1
+                } else {
+                    2
+                }
+            };
+            let current = upper_index(controller.state);
+            if !was_masked || current != upper_index(controller.previous) {
+                if was_masked {
+                    player.stop(shared.upper[upper_index(controller.previous)]);
+                }
+                let active = player.play(shared.upper[current]);
+                active.replay();
+                if current == 2 || current == 3 {
+                    active.repeat();
+                }
+            }
+            if controller.state == 6 && controller.action != controller.previous_action {
+                player.play(shared.upper[0]).replay();
+            }
+            if controller.state == 13 && controller.action != controller.previous_action {
+                player
+                    .play(shared.upper[4])
+                    .set_speed((17.0 / 30.0) / 0.55)
+                    .replay();
+            }
+            if controller.state == 14 {
+                player.play(shared.upper[5]).set_speed((11.0 / 30.0) / 0.35);
+            }
+            if controller.state == 7 {
+                player
+                    .play(shared.upper[1])
+                    .set_speed(3.3 / crate::game::weapons::AK47.reload_seconds);
+            }
+        } else {
+            if was_masked {
+                player.stop_all();
+            }
+            transitions
+                .play(
+                    &mut player,
+                    shared.nodes[controller.state],
+                    Duration::from_secs_f32(0.12),
+                )
+                .replay();
+        }
+        controller.previous_locomotion = controller.locomotion;
+        controller.previous = controller.state;
+        controller.previous_action = controller.action;
     }
 }

@@ -21,6 +21,7 @@ fn setup_ui_camera(mut commands: Commands) {
         UiCamera,
         Camera2d,
         Camera {
+            hdr: true,
             order: 100,
             clear_color: bevy::render::camera::ClearColorConfig::None,
             ..default()

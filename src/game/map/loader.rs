@@ -19,28 +19,17 @@ impl Plugin for MapLoaderPlugin {
 #[derive(Component)]
 pub struct MapEntity;
 
-/// Resource holding the currently loaded map config (for gameplay)
-#[derive(Resource, Default)]
-pub struct CurrentMapConfig {
-    pub config: Option<MapConfig>,
-    pub base_path: String,
-}
-
 /// Spawns lighting entities based on map config
 pub fn spawn_lighting(
     commands: &mut Commands,
     config: &LightingConfig,
     marker: impl Component + Clone,
 ) {
-    // Ambient light
-    commands.spawn((
-        marker.clone(),
-        AmbientLight {
-            color: config.ambient_color.to_color(),
-            brightness: config.ambient_brightness,
-            affects_lightmapped_meshes: true,
-        },
-    ));
+    commands.insert_resource(AmbientLight {
+        color: config.ambient_color.to_color(),
+        brightness: config.ambient_brightness,
+        affects_lightmapped_meshes: true,
+    });
 
     // Point lights
     for light in &config.point_lights {
@@ -155,7 +144,7 @@ pub fn spawn_map_model(
     marker: impl Component + Clone,
 ) -> Entity {
     let model_path = format!("{}/{}", base_path, config.model);
-    
+
     commands
         .spawn((
             marker,

@@ -1,10 +1,13 @@
 [package]
-name = "fps_tutorial"
+name = "open-strike"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Open-source first-person tactical shooter"
+exclude = ["assets/audio/csgo/**", "assets/audio/local/**"]
 
 [dependencies]
-bevy = { version = "0.16", features = ["dynamic_linking", "jpeg"] }
+bevy = { version = "0.16", features = ["dynamic_linking", "jpeg", "wav"] }
 bevy_rapier3d = "0.30"
 bevy_fps_controller = "0.16"
 bevy_common_assets = { version = "0.13", features = ["ron"] }

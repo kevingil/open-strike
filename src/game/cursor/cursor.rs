@@ -1,67 +1,59 @@
+use crate::game::{ui::pause_menu::ExitConfirmation, GameState};
 use bevy::{
     prelude::*,
     window::{CursorGrabMode, PrimaryWindow},
 };
-use bevy_fps_controller::controller::FpsController;
-
-use super::super::GameState;
-
 pub struct CursorPlugin;
-
 impl Plugin for CursorPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Playing), lock_cursor)
-            .add_systems(OnExit(GameState::Playing), unlock_cursor)
-            .add_systems(Update, manage_cursor);
+        app.add_systems(Update, (manage_cursor, update_cursor));
     }
 }
-
-/// Lock cursor when entering Playing state
-fn lock_cursor(
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
-    mut controller_query: Query<&mut FpsController>,
+fn update_cursor(
+    state: Res<State<GameState>>,
+    mut windows: Query<&mut Window, With<PrimaryWindow>>,
 ) {
-    let Ok(mut window) = window_query.single_mut() else {
+    let Ok(mut window) = windows.single_mut() else {
         return;
     };
-    window.cursor_options.grab_mode = CursorGrabMode::Locked;
-    window.cursor_options.visible = false;
-    for mut controller in &mut controller_query {
-        controller.enable_input = true;
-        }
-    }
-
-/// Unlock cursor when exiting Playing state
-fn unlock_cursor(
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
-    mut controller_query: Query<&mut FpsController>,
-) {
-    let Ok(mut window) = window_query.single_mut() else {
-        return;
+    let active = *state.get() == GameState::Playing && window.focused;
+    window.cursor_options.grab_mode = if active {
+        CursorGrabMode::Locked
+    } else {
+        CursorGrabMode::None
     };
-    window.cursor_options.grab_mode = CursorGrabMode::None;
-    window.cursor_options.visible = true;
-    for mut controller in &mut controller_query {
-        controller.enable_input = false;
-    }
+    window.cursor_options.visible = !active;
 }
-
 fn manage_cursor(
-    key: Res<ButtonInput<KeyCode>>,
-    current_state: Res<State<GameState>>,
-    mut next_state: ResMut<NextState<GameState>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    state: Res<State<GameState>>,
+    mut next: ResMut<NextState<GameState>>,
+    mut confirmation: ResMut<ExitConfirmation>,
+    windows: Query<&Window, With<PrimaryWindow>>,
 ) {
-    if key.just_pressed(KeyCode::Escape) {
-        match current_state.get() {
-            GameState::Playing => {
-                next_state.set(GameState::Paused);
-            }
-            GameState::Paused => {
-                next_state.set(GameState::Playing);
-            }
-            GameState::MainMenu => {
-                // Do nothing in main menu
-            }
+    if *state.get() == GameState::Playing
+        && windows.single().is_ok_and(|w| !w.focused)
+        && std::env::var_os("CSRS_CAPTURE").is_none()
+    {
+        next.set(GameState::Paused);
+    }
+    if keys.just_pressed(KeyCode::Escape) {
+        if confirmation.open {
+            confirmation.open = false;
+            return;
         }
+        match state.get() {
+            GameState::Playing => next.set(GameState::Paused),
+            GameState::Paused => next.set(GameState::Playing),
+            GameState::Loading | GameState::LoadFailed | GameState::Finished => {
+                next.set(GameState::MainMenu)
+            }
+            _ => {}
+        }
+    }
+    if keys.just_pressed(KeyCode::Enter)
+        && matches!(state.get(), GameState::LoadFailed | GameState::Finished)
+    {
+        next.set(GameState::Loading);
     }
 }

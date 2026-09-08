@@ -5,15 +5,28 @@ use bevy_rapier3d::prelude::*;
 use rand::*;
 use rngs::ThreadRng;
 
+use super::level::LevelEntity;
 use crate::game::player::player_shooting::Shootable;
 use crate::game::GameState;
-use super::level::LevelEntity;
 
 pub struct TargetsPlugin;
 impl Plugin for TargetsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, update_targets.run_if(in_state(GameState::Playing)))
-            .add_systems(OnEnter(GameState::Playing), init_grid_shot);
+        app.add_systems(
+            Update,
+            update_targets
+                .run_if(in_state(GameState::Playing))
+                .run_if(resource_exists::<GridShot>),
+        )
+        .add_systems(
+            OnEnter(GameState::Playing),
+            init_grid_shot.run_if(
+                |config: Res<crate::game::config::GameConfig>,
+                 existing: Query<(), With<Target>>| {
+                    config.mode == crate::game::config::GameMode::Freemode && existing.is_empty()
+                },
+            ),
+        );
     }
 }
 #[derive(Component)]

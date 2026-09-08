@@ -1,0 +1,16 @@
+{
+  "location": "A Site viewed from Long A",
+  "source_anchor": [
+    51.0,
+    74.0,
+    0.0
+  ],
+  "source_yaw": -0.6,
+  "source_faces": 9061,
+  "vignette_faces": 1130,
+  "mesh_count": 3,
+  "material_count": 3,
+  "background_bytes": 612764,
+  "card_bytes": 326537,
+  "max_texture_dimension": 1024
+}

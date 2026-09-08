@@ -1,249 +1,232 @@
-use bevy::prelude::*;
-
-use super::{MenuTab, SelectedMap};
+use super::{
+    scene_definition::menu_scene,
+    start_button::{self, StartButtonMaterial},
+    style::*,
+    LocalMatchOption, MenuPage, MenuTab,
+};
 use crate::game::{
-    config::{GameConfig, GameMode, MapId},
+    config::{GameConfig, MapId},
     GameState,
 };
-
+use bevy::prelude::*;
 pub struct PlayTabPlugin;
-
+#[derive(Component)]
+pub(super) struct StartGameButton;
+#[derive(Component)]
+struct MapCard;
+#[derive(Component)]
+struct MatchDetails;
+#[derive(Resource, Default)]
+struct StartPending(bool);
 impl Plugin for PlayTabPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_play_tab)
+        app.init_resource::<StartPending>()
+            .add_plugins(UiMaterialPlugin::<StartButtonMaterial>::default())
+            .add_systems(Startup, setup)
+            .add_systems(
+                OnEnter(GameState::MainMenu),
+                |mut pending: ResMut<StartPending>| pending.0 = false,
+            )
             .add_systems(
                 Update,
-                (
-                    toggle_play_tab_visibility,
-                    handle_gamemode_buttons,
-                    handle_map_buttons,
-                    update_gamemode_button_styles,
-                ),
+                (interact, details, start_button::animate)
+                    .run_if(in_state(GameState::MainMenu).and(in_state(MenuTab::Play))),
             );
     }
 }
-
-#[derive(Component)]
-struct PlayTabRoot;
-
-#[derive(Component)]
-struct GameModeButton(GameMode);
-
-#[derive(Component)]
-struct MapButton(MapId);
-
-// Colors
-const OVERLAY_BG: Color = Color::srgba(0.02, 0.02, 0.05, 0.92);
-const MODE_BUTTON_NORMAL: Color = Color::srgba(0.15, 0.15, 0.2, 1.0);
-const MODE_BUTTON_ACTIVE: Color = Color::srgb(0.2, 0.5, 0.3);
-const MAP_CARD_BG: Color = Color::srgba(0.12, 0.12, 0.18, 1.0);
-const MAP_CARD_HOVER: Color = Color::srgba(0.2, 0.2, 0.3, 1.0);
-
-/// Get all available maps for a game mode
-fn get_maps_for_mode(mode: &GameMode) -> Vec<(MapId, &'static str, Color)> {
-    match mode {
-        GameMode::Freemode => vec![
-            (MapId::Warehouse, "Warehouse", Color::srgb(0.3, 0.5, 0.7)),
-            (MapId::Dust2, "Dust 2", Color::srgb(0.8, 0.7, 0.5)),
-        ],
-    }
-}
-
-/// Get all game modes
-fn get_all_modes() -> Vec<GameMode> {
-    vec![GameMode::Freemode]
-}
-
-fn setup_play_tab(mut commands: Commands, config: Res<GameConfig>) {
-    // Play tab overlay
+fn setup(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    mut button_materials: ResMut<Assets<StartButtonMaterial>>,
+) {
     commands
         .spawn((
-            PlayTabRoot,
+            MenuPage(MenuTab::Play),
             Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                position_type: PositionType::Absolute,
-                top: Val::Px(70.0),
-                left: Val::Px(0.0),
-                flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(40.0)),
-                row_gap: Val::Px(30.0),
-                ..default()
+                padding: UiRect::ZERO,
+                row_gap: Val::Px(0.),
+                ..page()
             },
-            BackgroundColor(OVERLAY_BG),
+            BackgroundColor(Color::srgba(0.16, 0.19, 0.22, 0.68)),
             GlobalZIndex(150),
-            Visibility::Hidden,
         ))
-        .with_children(|parent| {
-            // Title
-            parent.spawn((
-                Text::new("SELECT GAME MODE & MAP"),
-                TextFont {
-                    font_size: 32.0,
+        .with_children(|root| {
+            root.spawn((
+                Node {
+                    width: Val::Percent(100.),
+                    min_height: Val::Px(58.),
+                    flex_shrink: 0.,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    border: UiRect::bottom(Val::Px(1.)),
                     ..default()
                 },
-                TextColor(Color::WHITE),
-            ));
-
-            // Game mode tabs
-            parent
-                .spawn(Node {
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(15.0),
+                BorderColor(Color::srgba(1., 1., 1., 0.14)),
+            ))
+            .with_children(|modes| {
+                modes
+                    .spawn((
+                        Node {
+                            padding: UiRect::axes(Val::Px(20.), Val::Px(9.)),
+                            ..button()
+                        },
+                        BackgroundColor(GLASS_SELECTED),
+                        BorderColor(ACCENT),
+                    ))
+                    .with_child(label(LocalMatchOption::LABEL.to_uppercase(), 17., ACCENT));
+            });
+            root.spawn(Node {
+                display: Display::Grid,
+                grid_template_columns: RepeatedGridTrack::flex(3, 1.),
+                flex_grow: 1.,
+                min_height: Val::Px(0.),
+                padding: UiRect::all(Val::VMin(4.)),
+                column_gap: Val::VMin(3.),
+                align_items: AlignItems::Start,
+                overflow: Overflow::scroll_y(),
+                ..default()
+            })
+            .with_children(|row| {
+                row.spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(18.),
+                    width: Val::Percent(100.),
+                    max_width: Val::Px(280.),
+                    min_width: Val::Px(0.),
+                    padding: UiRect::top(Val::Px(12.)),
                     ..default()
                 })
-                .with_children(|mode_row| {
-                    for mode in get_all_modes() {
-                        let is_active = mode == config.mode;
-                        let bg_color = if is_active {
-                            MODE_BUTTON_ACTIVE
-                        } else {
-                            MODE_BUTTON_NORMAL
-                        };
-
-                        mode_row
-                            .spawn((
-                                GameModeButton(mode.clone()),
-                                Button,
-                                Node {
-                                    padding: UiRect::axes(Val::Px(25.0), Val::Px(12.0)),
-                                    justify_content: JustifyContent::Center,
-                                    align_items: AlignItems::Center,
-                                    ..default()
-                                },
-                                BackgroundColor(bg_color),
-                                BorderRadius::all(Val::Px(6.0)),
-                            ))
-                            .with_child((
-                                Text::new(mode.name()),
-                                TextFont {
-                                    font_size: 18.0,
-                                    ..default()
-                                },
-                                TextColor(Color::WHITE),
-                            ));
-                    }
+                .with_children(|info| {
+                    info.spawn(label("Deathmatch", 28., WHITE));
+                    info.spawn((MatchDetails, label("", 17., WHITE)));
+                    info.spawn(label(
+                        "Eliminate the opposing team.\nRespawn and rejoin the fight.",
+                        16.,
+                        MUTED,
+                    ));
                 });
-
-            // Map grid container
-            parent
-                .spawn(Node {
-                    flex_direction: FlexDirection::Row,
-                    flex_wrap: FlexWrap::Wrap,
-                    column_gap: Val::Px(20.0),
-                    row_gap: Val::Px(20.0),
-                    padding: UiRect::top(Val::Px(20.0)),
-                    ..default()
-                })
-                .with_children(|grid| {
-                    for (map_id, map_name, preview_color) in get_maps_for_mode(&config.mode) {
-                        grid.spawn((
-                            MapButton(map_id),
-                            Button,
-                            Node {
-                                width: Val::Px(200.0),
-                                height: Val::Px(160.0),
-                                flex_direction: FlexDirection::Column,
-                                ..default()
-                            },
-                            BackgroundColor(MAP_CARD_BG),
-                            BorderRadius::all(Val::Px(8.0)),
-                        ))
-                        .with_children(|card| {
-                            // Preview image placeholder
-                            card.spawn((
-                                Node {
-                                    width: Val::Percent(100.0),
-                                    height: Val::Px(100.0),
-                                    ..default()
-                                },
-                                BackgroundColor(preview_color),
-                                BorderRadius::top(Val::Px(8.0)),
-                            ));
-
-                            // Map name
-                            card.spawn((
-                                Text::new(map_name),
-                                TextFont {
-                                    font_size: 16.0,
-                                    ..default()
-                                },
-                                TextColor(Color::WHITE),
-                                Node {
-                                    padding: UiRect::all(Val::Px(12.0)),
-                                    ..default()
-                                },
-                            ));
-                        });
-                    }
+                row.spawn((
+                    MapCard,
+                    Button,
+                    Node {
+                        width: Val::VMin(30.),
+                        height: Val::VMin(49.),
+                        max_width: Val::Percent(100.),
+                        justify_self: JustifySelf::Center,
+                        border: UiRect::all(Val::Px(2.)),
+                        flex_direction: FlexDirection::Column,
+                        justify_content: JustifyContent::End,
+                        ..default()
+                    },
+                    BackgroundColor(PANEL),
+                    BorderColor(ACCENT),
+                ))
+                .with_children(|card| {
+                    card.spawn((
+                        ImageNode::new(server.load(menu_scene(&MapId::Dust2).thumbnail)),
+                        Node {
+                            position_type: PositionType::Absolute,
+                            width: Val::Percent(100.),
+                            height: Val::Percent(100.),
+                            ..default()
+                        },
+                    ));
+                    card.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            top: Val::Px(10.),
+                            right: Val::Px(10.),
+                            padding: UiRect::all(Val::Px(8.)),
+                            ..default()
+                        },
+                        BackgroundColor(SELECTED),
+                    ))
+                    .with_child(label("SELECTED", 11., WHITE));
+                    card.spawn((
+                        Node {
+                            padding: UiRect::all(Val::Px(18.)),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: Val::Px(4.),
+                            ..default()
+                        },
+                        BackgroundColor(INK),
+                    ))
+                    .with_children(|name| {
+                        name.spawn(label("DUST 2", 28., WHITE));
+                        name.spawn(label("DEATHMATCH", 12., ACCENT));
+                    });
                 });
-
-            // Hint
-            parent.spawn((
-                Text::new("Click a map to select and return to home"),
-                TextFont {
-                    font_size: 14.0,
+            });
+            root.spawn((
+                Node {
+                    width: Val::Percent(100.),
+                    flex_shrink: 0.,
+                    justify_content: JustifyContent::End,
+                    padding: UiRect::axes(Val::VMin(4.), Val::Px(16.)),
+                    border: UiRect::top(Val::Px(1.)),
                     ..default()
                 },
-                TextColor(Color::srgb(0.5, 0.5, 0.5)),
-            ));
+                BorderColor(Color::srgba(1., 1., 1., 0.14)),
+            ))
+            .with_children(|footer| {
+                footer
+                    .spawn((
+                        StartGameButton,
+                        Button,
+                        Node {
+                            width: Val::Px(260.),
+                            max_width: Val::Percent(100.),
+                            height: Val::Px(52.),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
+                        MaterialNode(button_materials.add(StartButtonMaterial::default())),
+                        BoxShadow::new(
+                            start_button::LABEL_COLOR.with_alpha(0.),
+                            Val::Px(0.),
+                            Val::Px(0.),
+                            Val::Px(1.),
+                            Val::Px(9.),
+                        ),
+                    ))
+                    .with_child(label("START GAME", 21., start_button::LABEL_COLOR));
+            });
         });
 }
-
-fn toggle_play_tab_visibility(
-    game_state: Res<State<GameState>>,
-    menu_tab: Res<State<MenuTab>>,
-    mut play_query: Query<&mut Visibility, With<PlayTabRoot>>,
-) {
-    let Ok(mut visibility) = play_query.single_mut() else {
+fn details(config: Res<GameConfig>, mut labels: Query<&mut Text, With<MatchDetails>>) {
+    if !config.is_changed() {
         return;
-    };
-
-    let should_show =
-        *game_state.get() == GameState::MainMenu && *menu_tab.get() == MenuTab::Play;
-
-    *visibility = if should_show {
-        Visibility::Visible
-    } else {
-        Visibility::Hidden
-    };
+    }
+    let time = config
+        .match_settings
+        .time_limit
+        .map(|v| format!("{} min", v.as_secs() / 60))
+        .unwrap_or("Unlimited time".into());
+    let score = config
+        .match_settings
+        .score_limit
+        .map(|v| format!("First to {v} kills"))
+        .unwrap_or("No score limit".into());
+    for mut text in &mut labels {
+        **text = format!("Local bots · 3v3\n{time} · {score}");
+    }
 }
-
-fn handle_gamemode_buttons(
-    interaction_query: Query<(&Interaction, &GameModeButton), Changed<Interaction>>,
+fn interact(
     mut config: ResMut<GameConfig>,
+    mut pending: ResMut<StartPending>,
+    mut next: ResMut<NextState<GameState>>,
+    cards: Query<&Interaction, (Changed<Interaction>, With<MapCard>)>,
+    buttons: Query<&Interaction, (Changed<Interaction>, With<StartGameButton>)>,
 ) {
-    for (interaction, mode_button) in &interaction_query {
-        if *interaction == Interaction::Pressed {
-            config.mode = mode_button.0.clone();
-        }
+    if cards.iter().any(|i| *i == Interaction::Pressed) {
+        LocalMatchOption::select(&mut config);
     }
-}
-
-fn handle_map_buttons(
-    interaction_query: Query<(&Interaction, &MapButton), Changed<Interaction>>,
-    mut selected_map: ResMut<SelectedMap>,
-    mut next_tab: ResMut<NextState<MenuTab>>,
-) {
-    for (interaction, map_button) in &interaction_query {
-        if *interaction == Interaction::Pressed {
-            selected_map.map = Some(map_button.0.clone());
-            selected_map.ready_to_start = true;
-            next_tab.set(MenuTab::Home);
-        }
-    }
-}
-
-fn update_gamemode_button_styles(
-    config: Res<GameConfig>,
-    mut query: Query<(&GameModeButton, &Interaction, &mut BackgroundColor)>,
-) {
-    for (mode_button, interaction, mut bg) in &mut query {
-        let is_active = mode_button.0 == config.mode;
-        *bg = match (*interaction, is_active) {
-            (_, true) => BackgroundColor(MODE_BUTTON_ACTIVE),
-            (Interaction::Hovered, false) => BackgroundColor(MAP_CARD_HOVER),
-            _ => BackgroundColor(MODE_BUTTON_NORMAL),
-        };
+    if !pending.0
+        && LocalMatchOption::selected(&config)
+        && buttons.iter().any(|i| *i == Interaction::Pressed)
+    {
+        pending.0 = true;
+        next.set(GameState::Loading);
     }
 }

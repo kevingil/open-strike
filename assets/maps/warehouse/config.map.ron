@@ -29,7 +29,7 @@
         tonemapping: TonyMcMapface,
     ),
     spawn_points: [
-        (position: (x: 0.0, y: 2.0, z: 0.0), rotation: 0.0),
+        (position: (x: 0.0, y: 0.03, z: 0.0), rotation: 0.0),
     ],
     clear_color: Some((r: 0.53, g: 0.81, b: 0.92)),
 )

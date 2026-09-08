@@ -8,6 +8,14 @@ use serde::{Deserialize, Serialize};
 /// Main map configuration - loaded from .map.ron files
 #[derive(Asset, TypePath, Resource, Debug, Clone, Serialize, Deserialize)]
 pub struct MapConfig {
+    #[serde(default)]
+    pub navigation_bounds: Option<(Vec3Config, Vec3Config)>,
+    #[serde(default)]
+    pub navigation: Vec<crate::game::bots::NavNode>,
+    #[serde(default)]
+    pub patrol_destinations: Vec<usize>,
+    #[serde(default)]
+    pub callouts: Vec<MapCallout>,
     /// Display name of the map
     pub name: String,
     /// Path to the map model file (relative to the map folder)
@@ -166,6 +174,8 @@ impl TonemappingConfig {
 /// Spawn point configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpawnPoint {
+    #[serde(default)]
+    pub team: Option<crate::game::matchplay::Team>,
     pub position: Vec3Config,
     #[serde(default)]
     pub rotation: f32, // Y rotation in degrees
@@ -223,4 +233,11 @@ impl From<Vec3Config> for Vec3 {
     fn from(v: Vec3Config) -> Self {
         Vec3::new(v.x, v.y, v.z)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MapCallout {
+    pub name: String,
+    pub position: Vec3Config,
+    pub radius: f32,
 }

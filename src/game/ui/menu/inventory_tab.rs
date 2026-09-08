@@ -1,323 +1,351 @@
-use bevy::prelude::*;
-
-use super::{MenuTab, PlayerLoadout, WeaponId};
-use crate::game::player::skins::{SkinId, SkinRegistry};
-use crate::game::GameState;
+use super::{style::*, MenuPage, MenuTab, PlayerLoadout, WeaponId};
+use crate::game::{
+    config::PRESET_GRENADES,
+    player::skins::{SkinId, SkinRegistry},
+    GameState,
+};
+use bevy::{
+    input::mouse::{MouseScrollUnit, MouseWheel},
+    prelude::*,
+    window::PrimaryWindow,
+};
 
 pub struct InventoryTabPlugin;
 
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq)]
+enum Category {
+    #[default]
+    Everything,
+    Weapons,
+    Characters,
+    Grenades,
+}
+
+#[derive(Component)]
+struct CategoryButton(Category);
+#[derive(Component)]
+struct InventoryCard(Category);
+#[derive(Component)]
+struct ItemCount;
+#[derive(Component)]
+struct InventoryScroll;
+#[derive(Component, Clone, Copy)]
+enum Item {
+    Weapon(WeaponId),
+    Character(SkinId),
+}
+
 impl Plugin for InventoryTabPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_inventory_tab)
+        // Open this view for a native capture without running the menu scenario.
+        if std::env::var_os("CSRS_CAPTURE").is_some()
+            && std::env::var_os("CSRS_CAPTURE_INVENTORY").is_some()
+        {
+            app.add_systems(
+                OnEnter(GameState::MainMenu),
+                (|mut next: ResMut<NextState<MenuTab>>| next.set(MenuTab::Inventory))
+                    .after(super::reset_menu),
+            );
+        }
+        app.init_resource::<Category>()
+            .add_systems(Startup, setup)
             .add_systems(
                 Update,
-                (
-                    toggle_inventory_tab_visibility,
-                    handle_weapon_buttons,
-                    update_weapon_button_styles,
-                    handle_skin_buttons,
-                    update_skin_button_styles,
-                ),
+                (filter, equipped, scroll)
+                    .run_if(in_state(GameState::MainMenu).and(in_state(MenuTab::Inventory))),
             );
     }
 }
 
-#[derive(Component)]
-struct InventoryTabRoot;
-
-#[derive(Component)]
-struct WeaponButton(WeaponId);
-
-#[derive(Component)]
-struct SkinButton(SkinId);
-
-// Colors
-const OVERLAY_BG: Color = Color::srgba(0.02, 0.02, 0.05, 0.92);
-const BUTTON_NORMAL: Color = Color::srgba(0.12, 0.12, 0.18, 1.0);
-const BUTTON_HOVER: Color = Color::srgba(0.2, 0.2, 0.3, 1.0);
-const BUTTON_SELECTED: Color = Color::srgb(0.2, 0.5, 0.3);
-
-fn setup_inventory_tab(
-    mut commands: Commands,
-    loadout: Res<PlayerLoadout>,
-    skin_registry: Res<SkinRegistry>,
-) {
-    // Inventory tab overlay
+fn setup(mut commands: Commands, server: Res<AssetServer>, skins: Res<SkinRegistry>) {
     commands
         .spawn((
-            InventoryTabRoot,
+            MenuPage(MenuTab::Inventory),
             Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                position_type: PositionType::Absolute,
-                top: Val::Px(70.0),
-                left: Val::Px(0.0),
-                flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(40.0)),
-                row_gap: Val::Px(30.0),
-                overflow: Overflow::scroll_y(),
-                ..default()
+                padding: UiRect::ZERO,
+                row_gap: Val::Px(0.),
+                ..page()
             },
-            BackgroundColor(OVERLAY_BG),
+            BackgroundColor(Color::srgba(0.16, 0.19, 0.22, 0.68)),
             GlobalZIndex(150),
-            Visibility::Hidden,
         ))
-        .with_children(|parent| {
-            // Title
-            parent.spawn((
-                Text::new("LOADOUT"),
-                TextFont {
-                    font_size: 32.0,
+        .with_children(|root| {
+            root.spawn((
+                Node {
+                    width: Val::Percent(100.),
+                    min_height: Val::Px(58.),
+                    padding: UiRect::all(Val::Px(8.)),
+                    column_gap: Val::Px(8.),
+                    row_gap: Val::Px(8.),
+                    flex_wrap: FlexWrap::Wrap,
+                    flex_shrink: 0.,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    border: UiRect::bottom(Val::Px(1.)),
                     ..default()
                 },
-                TextColor(Color::WHITE),
-            ));
-
-            // Section: Primary Weapon
-            parent
-                .spawn(Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: Val::Px(15.0),
-                    ..default()
-                })
-                .with_children(|section| {
-                    section.spawn((
-                        Text::new("Primary Weapon"),
-                        TextFont {
-                            font_size: 20.0,
+                BackgroundColor(Color::srgba(0.06, 0.08, 0.10, 0.35)),
+                BorderColor(Color::srgba(1., 1., 1., 0.12)),
+            ))
+            .with_children(|tabs| {
+                for (category, title) in [
+                    (Category::Everything, "EVERYTHING"),
+                    (Category::Weapons, "WEAPONS"),
+                    (Category::Characters, "CHARACTERS"),
+                    (Category::Grenades, "GRENADES"),
+                ] {
+                    tabs.spawn((
+                        CategoryButton(category),
+                        Button,
+                        Node {
+                            padding: UiRect::axes(Val::Px(18.), Val::Px(8.)),
+                            border: UiRect::bottom(Val::Px(2.)),
                             ..default()
                         },
-                        TextColor(Color::srgb(0.7, 0.7, 0.7)),
-                    ));
-
-                    // Weapon list
-                    section
-                        .spawn(Node {
-                            flex_direction: FlexDirection::Row,
-                            column_gap: Val::Px(15.0),
-                            flex_wrap: FlexWrap::Wrap,
-                            ..default()
-                        })
-                        .with_children(|weapons| {
-                            for weapon in WeaponId::all() {
-                                let is_selected = weapon == loadout.primary_weapon;
-                                let bg_color = if is_selected {
-                                    BUTTON_SELECTED
-                                } else {
-                                    BUTTON_NORMAL
-                                };
-
-                                weapons
-                                    .spawn((
-                                        WeaponButton(weapon.clone()),
-                                        Button,
-                                        Node {
-                                            width: Val::Px(150.0),
-                                            height: Val::Px(120.0),
-                                            flex_direction: FlexDirection::Column,
-                                            justify_content: JustifyContent::Center,
-                                            align_items: AlignItems::Center,
-                                            row_gap: Val::Px(10.0),
-                                            ..default()
-                                        },
-                                        BackgroundColor(bg_color),
-                                        BorderRadius::all(Val::Px(8.0)),
-                                    ))
-                                    .with_children(|card| {
-                                        // Weapon icon placeholder
-                                        card.spawn((
-                                            Node {
-                                                width: Val::Px(80.0),
-                                                height: Val::Px(50.0),
-                                                ..default()
-                                            },
-                                            BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.1)),
-                                            BorderRadius::all(Val::Px(4.0)),
-                                        ));
-
-                                        // Weapon name
-                                        card.spawn((
-                                            Text::new(weapon.name()),
-                                            TextFont {
-                                                font_size: 16.0,
-                                                ..default()
-                                            },
-                                            TextColor(Color::WHITE),
-                                        ));
-                                    });
-                            }
-                        });
-                });
-
-            // Section: Character Skin
-            parent
-                .spawn(Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: Val::Px(15.0),
-                    ..default()
-                })
-                .with_children(|section| {
-                    section.spawn((
-                        Text::new("Character Skin"),
-                        TextFont {
-                            font_size: 20.0,
-                            ..default()
-                        },
-                        TextColor(Color::srgb(0.7, 0.7, 0.7)),
-                    ));
-
-                    // Skin list
-                    section
-                        .spawn(Node {
-                            flex_direction: FlexDirection::Row,
-                            column_gap: Val::Px(15.0),
-                            flex_wrap: FlexWrap::Wrap,
-                            ..default()
-                        })
-                        .with_children(|skins| {
-                            for skin_def in &skin_registry.skins {
-                                let is_selected = skin_def.id == loadout.selected_skin;
-                                let bg_color = if is_selected {
-                                    BUTTON_SELECTED
-                                } else {
-                                    BUTTON_NORMAL
-                                };
-
-                                skins
-                                    .spawn((
-                                        SkinButton(skin_def.id),
-                                        Button,
-                                        Node {
-                                            width: Val::Px(150.0),
-                                            height: Val::Px(140.0),
-                                            flex_direction: FlexDirection::Column,
-                                            justify_content: JustifyContent::Center,
-                                            align_items: AlignItems::Center,
-                                            row_gap: Val::Px(8.0),
-                                            ..default()
-                                        },
-                                        BackgroundColor(bg_color),
-                                        BorderRadius::all(Val::Px(8.0)),
-                                    ))
-                                    .with_children(|card| {
-                                        // Skin icon placeholder
-                                        card.spawn((
-                                            Node {
-                                                width: Val::Px(60.0),
-                                                height: Val::Px(60.0),
-                                                ..default()
-                                            },
-                                            BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.1)),
-                                            BorderRadius::all(Val::Px(4.0)),
-                                        ));
-
-                                        // Skin name
-                                        card.spawn((
-                                            Text::new(skin_def.name),
-                                            TextFont {
-                                                font_size: 14.0,
-                                                ..default()
-                                            },
-                                            TextColor(Color::WHITE),
-                                        ));
-
-                                        // Side indicator
-                                        card.spawn((
-                                            Text::new(skin_def.side.name()),
-                                            TextFont {
-                                                font_size: 12.0,
-                                                ..default()
-                                            },
-                                            TextColor(skin_def.side.color()),
-                                        ));
-                                    });
-                            }
-                        });
-                });
-
-            // Spacer
-            parent.spawn(Node {
-                flex_grow: 1.0,
-                ..default()
+                        BackgroundColor(Color::NONE),
+                        BorderColor(Color::NONE),
+                    ))
+                    .with_child(label(title, 16., WHITE));
+                }
             });
-
-            // Hint
-            parent.spawn((
-                Text::new("Select your weapon and character skin"),
-                TextFont {
-                    font_size: 14.0,
+            root.spawn((
+                ItemCount,
+                label("", 14., MUTED),
+                Node {
+                    margin: UiRect::new(Val::VMin(5.), Val::VMin(5.), Val::Px(22.), Val::Px(18.)),
+                    flex_shrink: 0.,
                     ..default()
                 },
-                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+            ));
+            root.spawn((
+                InventoryScroll,
+                ScrollPosition::default(),
+                Node {
+                    flex_grow: 1.,
+                    min_height: Val::Px(0.),
+                    overflow: Overflow::scroll_y(),
+                    padding: UiRect::axes(Val::VMin(5.), Val::Px(0.)),
+                    ..default()
+                },
+            ))
+            .with_children(|viewport| {
+                viewport
+                    .spawn(Node {
+                        width: Val::Percent(100.),
+                        align_self: AlignSelf::Start,
+                        flex_wrap: FlexWrap::Wrap,
+                        column_gap: Val::Px(22.),
+                        row_gap: Val::Px(28.),
+                        padding: UiRect::bottom(Val::Px(24.)),
+                        ..default()
+                    })
+                    .with_children(|grid| {
+                        let weapons = WeaponId::all().into_iter().map(|weapon| {
+                            let (preview, subtitle) = match weapon {
+                                WeaponId::AK47 => {
+                                    ("generated/ui/inventory/ak47.png", "Rifle · Default finish")
+                                }
+                                WeaponId::DefaultKnife => {
+                                    ("generated/ui/inventory/knife.png", "Melee · Default finish")
+                                }
+                            };
+                            (
+                                Item::Weapon(weapon),
+                                Category::Weapons,
+                                weapon.name(),
+                                subtitle,
+                                preview,
+                            )
+                        });
+                        let characters = skins.skins.iter().map(|skin| {
+                            let preview = match skin.id {
+                                SkinId::Soldier => "generated/ui/attacker_portrait.png",
+                                SkinId::Police => "generated/ui/defender_portrait.png",
+                            };
+                            (
+                                Item::Character(skin.id),
+                                Category::Characters,
+                                skin.name,
+                                skin.side.name(),
+                                preview,
+                            )
+                        });
+                        for (item, category, name, subtitle, preview) in weapons.chain(characters) {
+                            grid.spawn((
+                                InventoryCard(category),
+                                Node {
+                                    width: Val::Px(200.),
+                                    max_width: Val::Percent(100.),
+                                    flex_direction: FlexDirection::Column,
+                                    row_gap: Val::Px(5.),
+                                    ..default()
+                                },
+                            ))
+                            .with_children(|card| {
+                                card.spawn((
+                                    Node {
+                                        width: Val::Percent(100.),
+                                        aspect_ratio: Some(4. / 3.),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        border: UiRect::bottom(Val::Px(3.)),
+                                        overflow: Overflow::clip(),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgba(0.42, 0.45, 0.48, 0.74)),
+                                    BorderColor(Color::srgb(0.46, 0.63, 0.71)),
+                                ))
+                                .with_children(|image| {
+                                    let portrait = matches!(item, Item::Character(_));
+                                    image.spawn((
+                                        ImageNode::new(server.load(preview)),
+                                        Node {
+                                            width: Val::Percent(if portrait { 68. } else { 100. }),
+                                            aspect_ratio: Some(if portrait { 1. } else { 4. / 3. }),
+                                            ..default()
+                                        },
+                                    ));
+                                });
+                                card.spawn(label(name, 17., WHITE));
+                                card.spawn(label(subtitle, 13., MUTED));
+                                card.spawn((item, label("", 12., ACCENT)));
+                            });
+                        }
+                        for name in PRESET_GRENADES {
+                            grid.spawn((
+                                InventoryCard(Category::Grenades),
+                                Node {
+                                    width: Val::Px(200.),
+                                    max_width: Val::Percent(100.),
+                                    flex_direction: FlexDirection::Column,
+                                    row_gap: Val::Px(5.),
+                                    ..default()
+                                },
+                            ))
+                            .with_children(|card| {
+                                // Preset information only; no item model or edit action exists yet.
+                                card.spawn((
+                                    Node {
+                                        width: Val::Percent(100.),
+                                        aspect_ratio: Some(4. / 3.),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        border: UiRect::bottom(Val::Px(3.)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgba(0.42, 0.45, 0.48, 0.74)),
+                                    BorderColor(Color::srgb(0.46, 0.63, 0.71)),
+                                ))
+                                .with_child(label("PRESET", 20., MUTED));
+                                card.spawn(label(name, 17., WHITE));
+                                card.spawn(label("Grenade · Fixed selection", 13., MUTED));
+                                card.spawn(label("Not customizable", 12., ACCENT));
+                            });
+                        }
+                    });
+            });
+            root.spawn((
+                label("Choose weapons available to buy in Load Out", 13., MUTED),
+                Node {
+                    margin: UiRect::axes(Val::VMin(5.), Val::Px(18.)),
+                    flex_shrink: 0.,
+                    ..default()
+                },
             ));
         });
 }
 
-fn toggle_inventory_tab_visibility(
-    game_state: Res<State<GameState>>,
-    menu_tab: Res<State<MenuTab>>,
-    mut inventory_query: Query<&mut Visibility, With<InventoryTabRoot>>,
+fn filter(
+    mut selected: ResMut<Category>,
+    mut buttons: Query<(
+        &CategoryButton,
+        &Interaction,
+        &mut BackgroundColor,
+        &mut BorderColor,
+    )>,
+    mut cards: Query<(&InventoryCard, &mut Node)>,
+    mut counts: Query<&mut Text, With<ItemCount>>,
+    mut scrolls: Query<&mut ScrollPosition, With<InventoryScroll>>,
 ) {
-    let Ok(mut visibility) = inventory_query.single_mut() else {
+    for (button, interaction, _, _) in &mut buttons {
+        if *interaction == Interaction::Pressed && *selected != button.0 {
+            *selected = button.0;
+            for mut scroll in &mut scrolls {
+                scroll.offset_y = 0.;
+            }
+        }
+    }
+    for (button, interaction, mut background, mut border) in &mut buttons {
+        let active = *selected == button.0;
+        background.0 = if active {
+            GLASS_SELECTED
+        } else if *interaction == Interaction::Hovered {
+            Color::srgba(1., 1., 1., 0.08)
+        } else {
+            Color::NONE
+        };
+        border.0 = if active { ACCENT } else { Color::NONE };
+    }
+    let mut count = 0;
+    for (card, mut node) in &mut cards {
+        let visible = *selected == Category::Everything || *selected == card.0;
+        node.display = if visible {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        count += usize::from(visible);
+    }
+    for mut text in &mut counts {
+        let value = format!("{count} items");
+        if text.0 != value {
+            **text = value;
+        }
+    }
+}
+
+fn equipped(loadout: Res<PlayerLoadout>, mut labels: Query<(&Item, &mut Text)>) {
+    for (item, mut text) in &mut labels {
+        let active = match item {
+            Item::Weapon(weapon) => {
+                *weapon == loadout.primary_weapon || *weapon == loadout.melee_weapon
+            }
+            Item::Character(skin) => *skin == loadout.selected_skin,
+        };
+        let value = if active { "Equipped" } else { "Available" };
+        if text.0 != value {
+            **text = value.into();
+        }
+    }
+}
+
+fn scroll(
+    mut events: EventReader<MouseWheel>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut views: Query<(&ComputedNode, &GlobalTransform, &mut ScrollPosition), With<InventoryScroll>>,
+) {
+    let Ok(window) = windows.single() else {
         return;
     };
-
-    let should_show =
-        *game_state.get() == GameState::MainMenu && *menu_tab.get() == MenuTab::Inventory;
-
-    *visibility = if should_show {
-        Visibility::Visible
-    } else {
-        Visibility::Hidden
+    let Some(cursor) = window.physical_cursor_position() else {
+        events.clear();
+        return;
     };
-}
-
-fn handle_weapon_buttons(
-    interaction_query: Query<(&Interaction, &WeaponButton), Changed<Interaction>>,
-    mut loadout: ResMut<PlayerLoadout>,
-) {
-    for (interaction, weapon_button) in &interaction_query {
-        if *interaction == Interaction::Pressed {
-            loadout.primary_weapon = weapon_button.0.clone();
+    for event in events.read() {
+        for (node, transform, mut scroll) in &mut views {
+            let center = transform.translation().truncate();
+            if !Rect::from_center_size(center, node.size()).contains(cursor) {
+                continue;
+            }
+            let delta = event.y
+                * if event.unit == MouseScrollUnit::Line {
+                    32.
+                } else {
+                    1.
+                };
+            let maximum =
+                ((node.content_size().y - node.size().y) * node.inverse_scale_factor()).max(0.);
+            scroll.offset_y = (scroll.offset_y - delta).clamp(0., maximum);
         }
-    }
-}
-
-fn update_weapon_button_styles(
-    loadout: Res<PlayerLoadout>,
-    mut query: Query<(&WeaponButton, &Interaction, &mut BackgroundColor)>,
-) {
-    for (weapon_button, interaction, mut bg) in &mut query {
-        let is_selected = weapon_button.0 == loadout.primary_weapon;
-        *bg = match (*interaction, is_selected) {
-            (_, true) => BackgroundColor(BUTTON_SELECTED),
-            (Interaction::Hovered, false) => BackgroundColor(BUTTON_HOVER),
-            _ => BackgroundColor(BUTTON_NORMAL),
-        };
-    }
-}
-
-fn handle_skin_buttons(
-    interaction_query: Query<(&Interaction, &SkinButton), Changed<Interaction>>,
-    mut loadout: ResMut<PlayerLoadout>,
-) {
-    for (interaction, skin_button) in &interaction_query {
-        if *interaction == Interaction::Pressed {
-            loadout.selected_skin = skin_button.0;
-        }
-    }
-}
-
-fn update_skin_button_styles(
-    loadout: Res<PlayerLoadout>,
-    mut query: Query<(&SkinButton, &Interaction, &mut BackgroundColor)>,
-) {
-    for (skin_button, interaction, mut bg) in &mut query {
-        let is_selected = skin_button.0 == loadout.selected_skin;
-        *bg = match (*interaction, is_selected) {
-            (_, true) => BackgroundColor(BUTTON_SELECTED),
-            (Interaction::Hovered, false) => BackgroundColor(BUTTON_HOVER),
-            _ => BackgroundColor(BUTTON_NORMAL),
-        };
     }
 }

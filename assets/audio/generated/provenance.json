@@ -1,0 +1,136 @@
+{
+  "license": "MIT",
+  "generator": "tools/generate_sounds.py",
+  "inputs": "Deterministic seeded noise and sine oscillators; no source recordings.",
+  "sample_rate": 44100,
+  "clips": {
+    "weapons/knife_draw": {
+      "path": "audio/generated/knife_draw.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 11025,
+      "sha256": "60fee3ccf403600909cd66c506475af7a9f2b3178b1e9a5228c9b1b57369341d"
+    },
+    "weapons/knife_slash": {
+      "path": "audio/generated/knife_slash.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 13230,
+      "sha256": "6f6e6217a32f5fe03bcec1ab7adc2802ec85f44f2f50d8e8615270fdd938bec7"
+    },
+    "weapons/ak47-1": {
+      "path": "audio/generated/rifle_fire.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 14994,
+      "sha256": "252863257bbc1c1a54386f790e26d62def613812c4ebd36d84d2a76cc5a83796"
+    },
+    "weapons/ak47_draw": {
+      "path": "audio/generated/rifle_draw.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 10584,
+      "sha256": "b8143ab85aa9df0a438081accc5f34c0565849ae761547aecc0d0d02e8ab6e64"
+    },
+    "weapons/ak47_clipout": {
+      "path": "audio/generated/magazine_out.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 7056,
+      "sha256": "689d654c8d046085c67ca9a666c3fe087b762f46388bdacfd8b2b164adce6c96"
+    },
+    "weapons/ak47_clipin": {
+      "path": "audio/generated/magazine_in.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 7938,
+      "sha256": "fe75ae768c6275a8f571c71a073f98c0ae704a8b1ae0891d96038aa936df657a"
+    },
+    "weapons/ak47_boltpull": {
+      "path": "audio/generated/charging_handle.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 11025,
+      "sha256": "c170026ae2be701da13d0b2470046fee2fd9fea0934a71e49cfed18961c15c96"
+    },
+    "physics/flesh_impact_bullet1": {
+      "path": "audio/generated/impact_1.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 5292,
+      "sha256": "734d72b887d6b935b50b58791194fa43168ce50efeaa152ee7d7f12aede2e66d"
+    },
+    "physics/flesh_impact_bullet2": {
+      "path": "audio/generated/impact_2.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 5292,
+      "sha256": "64c50f63959fab601c81bf5adfcb2db6c62cf67a5d8ef76f5320acceb21ac995"
+    },
+    "physics/flesh_impact_bullet3": {
+      "path": "audio/generated/impact_3.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 5292,
+      "sha256": "4654fe203a0a1da315918d3bd55aae8d596517d6ba23fd62f2aa6e56edfe4f42"
+    },
+    "physics/flesh_impact_bullet4": {
+      "path": "audio/generated/impact_4.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 5292,
+      "sha256": "4f3648610148054272bc9d8303249bde5aa894636e5cc983161bf1b8a2d1954d"
+    },
+    "physics/flesh_impact_bullet5": {
+      "path": "audio/generated/impact_5.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 5292,
+      "sha256": "2837c77ba22b4ebadf76fed9c30208d360601c9bdb7422ba92cfba31319b422f"
+    },
+    "physics/drywall_footstep1": {
+      "path": "audio/generated/footstep_1.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 8379,
+      "sha256": "55cefa1136e38fe192e308b024b7067e8181ed310c694f23e4fba7283e9223cd"
+    },
+    "physics/drywall_footstep2": {
+      "path": "audio/generated/footstep_2.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 8379,
+      "sha256": "794aa8c69894b60df506b9016a159250657759e8d335a6ee5a498bde9305f776"
+    },
+    "physics/drywall_footstep3": {
+      "path": "audio/generated/footstep_3.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 8379,
+      "sha256": "bc575a77235a1f62d2557c7b0dd9ee2918c1754f81da2a0da82ba87d11dfa740"
+    },
+    "physics/drywall_footstep4": {
+      "path": "audio/generated/footstep_4.wav",
+      "channels": 1,
+      "sample_rate": 44100,
+      "bits_per_sample": 16,
+      "frames": 8379,
+      "sha256": "01c56335b48cc4a32404a90480025e0ed94c3e1e1f309a3c94046748fb7bf679"
+    }
+  }
+}

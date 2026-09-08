@@ -1,0 +1,12 @@
+{
+  "idle_rifle": "anim_003_Armature",
+  "fire_rifle": "anim_0_Armature",
+  "reload_rifle": "anim_002_Armature",
+  "run_forward": "anim_006_Armature",
+  "strafe_left": "anim_007_Armature",
+  "strafe_right": "anim_008_Armature",
+  "walk_forward": "anim_014_Armature",
+  "walk_backward": "anim_015_Armature",
+  "jump": "anim_004_Armature",
+  "menu_hold_rifle": "authored: planted carry, breathing and deliberate glances"
+}

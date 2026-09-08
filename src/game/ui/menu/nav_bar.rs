@@ -1,320 +1,188 @@
+use super::{friends_drawer::DrawerClip, style::*, MenuTab};
+use crate::game::{ui::pause_menu::ExitConfirmation, GameState};
 use bevy::prelude::*;
-
-use super::MenuTab;
-use crate::game::GameState;
-
 pub struct NavBarPlugin;
-
+#[derive(Component)]
+pub struct NavBarRoot;
+#[derive(Component)]
+struct NavBarClip;
+#[derive(Component)]
+pub(super) struct NavButton(pub MenuTab);
+#[derive(Component)]
+struct QuitGameButton;
+#[derive(Component)]
+struct QuitGameTooltip;
 impl Plugin for NavBarPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_nav_bar)
+        app.add_systems(Startup, setup)
+            .add_systems(Update, visibility)
             .add_systems(
                 Update,
-                (
-                    handle_nav_buttons,
-                    update_button_styles,
-                    toggle_nav_visibility,
-                ),
+                (interact, interact_quit).run_if(in_state(GameState::MainMenu)),
             );
     }
 }
-
-#[derive(Component)]
-pub struct NavBarRoot;
-
-#[derive(Component)]
-struct HomeButton;
-
-#[derive(Component)]
-struct InventoryButton;
-
-#[derive(Component)]
-struct PlayButton;
-
-#[derive(Component)]
-struct SettingsButton;
-
-// Colors
-const NAV_BG: Color = Color::srgba(0.05, 0.05, 0.08, 0.95);
-const BUTTON_NORMAL: Color = Color::srgba(0.15, 0.15, 0.2, 1.0);
-const BUTTON_HOVER: Color = Color::srgba(0.25, 0.25, 0.35, 1.0);
-const BUTTON_ACTIVE: Color = Color::srgba(0.2, 0.5, 0.3, 1.0);
-const PLAY_BUTTON_NORMAL: Color = Color::srgb(0.2, 0.6, 0.3);
-const PLAY_BUTTON_HOVER: Color = Color::srgb(0.25, 0.7, 0.35);
-const PLAY_BUTTON_ACTIVE: Color = Color::srgb(0.15, 0.5, 0.25);
-
-fn setup_nav_bar(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Navigation bar container
+fn setup(mut commands: Commands, server: Res<AssetServer>) {
+    let clip = commands
+        .spawn((
+            NavBarClip,
+            DrawerClip,
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.),
+                right: Val::Px(56.),
+                height: Val::Px(HEADER),
+                overflow: Overflow::clip_x(),
+                ..default()
+            },
+            GlobalZIndex(220),
+        ))
+        .id();
     commands
         .spawn((
             NavBarRoot,
+            ChildOf(clip),
             Node {
-                width: Val::Percent(100.0),
-                height: Val::Px(70.0),
                 position_type: PositionType::Absolute,
-                top: Val::Px(0.0),
-                left: Val::Px(0.0),
-                flex_direction: FlexDirection::Row,
+                left: Val::Px(0.),
+                width: Val::Vw(100.),
+                padding: UiRect::right(Val::Px(56.)),
+                height: Val::Px(HEADER),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
-                column_gap: Val::Px(20.0),
-                padding: UiRect::horizontal(Val::Px(40.0)),
                 ..default()
             },
-            BackgroundColor(NAV_BG),
-            GlobalZIndex(200),
+            BackgroundColor(GLASS),
         ))
-        .with_children(|parent| {
-            // Home button (left side) with icon
-            parent
-                .spawn((
-                    HomeButton,
+        .with_children(|bar| {
+            for (tab, name) in [
+                (MenuTab::Home, "HOME"),
+                (MenuTab::Inventory, "INVENTORY"),
+                (MenuTab::Play, "PLAY"),
+                (MenuTab::LoadOut, "LOAD OUT"),
+                (MenuTab::Settings, "SETTINGS"),
+            ] {
+                let size = if tab == MenuTab::Play { 26. } else { 17. };
+                bar.spawn((
+                    NavButton(tab),
                     Button,
                     Node {
-                        width: Val::Px(50.0),
-                        height: Val::Px(50.0),
+                        width: Val::Vw(11.),
+                        min_width: Val::Px(92.),
+                        max_width: Val::Px(164.),
+                        height: Val::Px(HEADER),
+                        border: UiRect::bottom(Val::Px(2.)),
                         justify_content: JustifyContent::Center,
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(BUTTON_NORMAL),
-                    BorderRadius::all(Val::Px(8.0)),
+                    BackgroundColor(Color::NONE),
+                    BorderColor(Color::NONE),
                 ))
-                .with_child((
-                    ImageNode {
-                        image: asset_server.load("models/images/icon-home-48.png"),
-                        color: Color::WHITE,
-                        ..default()
-                    },
-                    Node {
-                        width: Val::Px(28.0),
-                        height: Val::Px(28.0),
-                        ..default()
-                    },
-                ));
-
-            // Spacer to push play to center
-            parent.spawn(Node {
-                flex_grow: 1.0,
-                ..default()
-            });
-
-            // Inventory button with icon and text
-            parent
-                .spawn((
-                    InventoryButton,
-                    Button,
-                    Node {
-                        height: Val::Px(45.0),
-                        padding: UiRect::axes(Val::Px(16.0), Val::Px(8.0)),
-                        flex_direction: FlexDirection::Row,
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        column_gap: Val::Px(8.0),
-                        ..default()
-                    },
-                    BackgroundColor(BUTTON_NORMAL),
-                    BorderRadius::all(Val::Px(8.0)),
-                ))
-                .with_children(|btn| {
-                    btn.spawn((
-                        ImageNode {
-                            image: asset_server.load("models/images/icon-box-50.png"),
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                        Node {
-                            width: Val::Px(22.0),
-                            height: Val::Px(22.0),
-                            ..default()
-                        },
-                    ));
-                    btn.spawn((
-                        Text::new("Inventory"),
-                        TextFont {
-                            font_size: 16.0,
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                    ));
-                });
-
-            // Play button (center, large, green)
-            parent
-                .spawn((
-                    PlayButton,
-                    Button,
-                    Node {
-                        width: Val::Px(160.0),
-                        height: Val::Px(50.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(PLAY_BUTTON_NORMAL),
-                    BorderRadius::all(Val::Px(8.0)),
-                ))
-                .with_child((
-                    Text::new("PLAY"),
-                    TextFont {
-                        font_size: 28.0,
-                        ..default()
-                    },
-                    TextColor(Color::WHITE),
-                ));
-
-            // Settings button with icon and text
-            parent
-                .spawn((
-                    SettingsButton,
-                    Button,
-                    Node {
-                        height: Val::Px(45.0),
-                        padding: UiRect::axes(Val::Px(16.0), Val::Px(8.0)),
-                        flex_direction: FlexDirection::Row,
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        column_gap: Val::Px(8.0),
-                        ..default()
-                    },
-                    BackgroundColor(BUTTON_NORMAL),
-                    BorderRadius::all(Val::Px(8.0)),
-                ))
-                .with_children(|btn| {
-                    btn.spawn((
-                        ImageNode {
-                            image: asset_server.load("models/images/icon-settings-50.png"),
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                        Node {
-                            width: Val::Px(22.0),
-                            height: Val::Px(22.0),
-                            ..default()
-                        },
-                    ));
-                    btn.spawn((
-                        Text::new("Settings"),
-                        TextFont {
-                            font_size: 16.0,
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                    ));
-                });
-
-            // Spacer to balance
-            parent.spawn(Node {
-                flex_grow: 1.0,
-                ..default()
-            });
+                .with_child(label(name, size, WHITE));
+            }
+            bar.spawn((
+                QuitGameButton,
+                Name::new("Quit Game"),
+                Button,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(8.),
+                    width: Val::Px(40.),
+                    height: Val::Px(40.),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                BackgroundColor(Color::NONE),
+            ))
+            .with_child((
+                ImageNode {
+                    color: WHITE,
+                    ..ImageNode::new(server.load("models/images/icon-shutdown-96.png"))
+                },
+                Node {
+                    width: Val::Px(26.),
+                    height: Val::Px(26.),
+                    ..default()
+                },
+            ));
+            bar.spawn((
+                QuitGameTooltip,
+                label("Quit Game", 14., WHITE),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(8.),
+                    top: Val::Px(HEADER),
+                    padding: UiRect::axes(Val::Px(12.), Val::Px(8.)),
+                    ..default()
+                },
+                BackgroundColor(INK),
+                Visibility::Hidden,
+            ));
         });
 }
-
-fn handle_nav_buttons(
-    home_query: Query<&Interaction, (Changed<Interaction>, With<HomeButton>)>,
-    inventory_query: Query<&Interaction, (Changed<Interaction>, With<InventoryButton>)>,
-    play_query: Query<&Interaction, (Changed<Interaction>, With<PlayButton>)>,
-    settings_query: Query<&Interaction, (Changed<Interaction>, With<SettingsButton>)>,
-    mut next_tab: ResMut<NextState<MenuTab>>,
+fn interact_quit(
+    mut buttons: Query<
+        (&Interaction, &mut BackgroundColor),
+        (Changed<Interaction>, With<QuitGameButton>),
+    >,
+    mut tooltips: Query<&mut Visibility, With<QuitGameTooltip>>,
+    mut confirmation: ResMut<ExitConfirmation>,
 ) {
-    for interaction in &home_query {
-        if *interaction == Interaction::Pressed {
-            next_tab.set(MenuTab::Home);
+    for (interaction, mut background) in &mut buttons {
+        let hovered = *interaction != Interaction::None;
+        background.0 = if hovered {
+            Color::srgba(1., 1., 1., 0.08)
+        } else {
+            Color::NONE
+        };
+        for mut visibility in &mut tooltips {
+            *visibility = if hovered {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
         }
-    }
-    for interaction in &inventory_query {
         if *interaction == Interaction::Pressed {
-            next_tab.set(MenuTab::Inventory);
-        }
-    }
-    for interaction in &play_query {
-        if *interaction == Interaction::Pressed {
-            next_tab.set(MenuTab::Play);
-        }
-    }
-    for interaction in &settings_query {
-        if *interaction == Interaction::Pressed {
-            next_tab.set(MenuTab::Settings);
+            confirmation.open = true;
+            for mut visibility in &mut tooltips {
+                *visibility = Visibility::Hidden;
+            }
         }
     }
 }
-
-fn update_button_styles(
-    current_tab: Res<State<MenuTab>>,
-    mut home_query: Query<
-        (&Interaction, &mut BackgroundColor),
-        (With<HomeButton>, Without<PlayButton>),
-    >,
-    mut inventory_query: Query<
-        (&Interaction, &mut BackgroundColor),
-        (With<InventoryButton>, Without<PlayButton>, Without<HomeButton>),
-    >,
-    mut play_query: Query<
-        (&Interaction, &mut BackgroundColor),
-        (With<PlayButton>, Without<HomeButton>, Without<InventoryButton>),
-    >,
-    mut settings_query: Query<
-        (&Interaction, &mut BackgroundColor),
-        (
-            With<SettingsButton>,
-            Without<PlayButton>,
-            Without<HomeButton>,
-            Without<InventoryButton>,
-        ),
-    >,
+fn interact(
+    tab: Res<State<MenuTab>>,
+    mut next: ResMut<NextState<MenuTab>>,
+    mut buttons: Query<(
+        &NavButton,
+        &Interaction,
+        &mut BackgroundColor,
+        &mut BorderColor,
+    )>,
 ) {
-    // Update Home button
-    for (interaction, mut bg) in &mut home_query {
-        let is_active = *current_tab.get() == MenuTab::Home;
-        *bg = match (*interaction, is_active) {
-            (_, true) => BackgroundColor(BUTTON_ACTIVE),
-            (Interaction::Hovered, false) => BackgroundColor(BUTTON_HOVER),
-            _ => BackgroundColor(BUTTON_NORMAL),
+    for (button, interaction, mut bg, mut border) in &mut buttons {
+        if *interaction == Interaction::Pressed && button.0 != *tab.get() {
+            next.set(button.0.clone());
+        }
+        let active = button.0 == *tab.get();
+        bg.0 = if active {
+            GLASS_SELECTED
+        } else if *interaction == Interaction::Hovered {
+            Color::srgba(1., 1., 1., 0.08)
+        } else {
+            Color::NONE
         };
-    }
-
-    // Update Inventory button
-    for (interaction, mut bg) in &mut inventory_query {
-        let is_active = *current_tab.get() == MenuTab::Inventory;
-        *bg = match (*interaction, is_active) {
-            (_, true) => BackgroundColor(BUTTON_ACTIVE),
-            (Interaction::Hovered, false) => BackgroundColor(BUTTON_HOVER),
-            _ => BackgroundColor(BUTTON_NORMAL),
-        };
-    }
-
-    // Update Play button
-    for (interaction, mut bg) in &mut play_query {
-        let is_active = *current_tab.get() == MenuTab::Play;
-        *bg = match (*interaction, is_active) {
-            (_, true) => BackgroundColor(PLAY_BUTTON_ACTIVE),
-            (Interaction::Hovered, false) => BackgroundColor(PLAY_BUTTON_HOVER),
-            _ => BackgroundColor(PLAY_BUTTON_NORMAL),
-        };
-    }
-
-    // Update Settings button
-    for (interaction, mut bg) in &mut settings_query {
-        let is_active = *current_tab.get() == MenuTab::Settings;
-        *bg = match (*interaction, is_active) {
-            (_, true) => BackgroundColor(BUTTON_ACTIVE),
-            (Interaction::Hovered, false) => BackgroundColor(BUTTON_HOVER),
-            _ => BackgroundColor(BUTTON_NORMAL),
-        };
+        border.0 = if active { ACCENT } else { Color::NONE };
     }
 }
-
-fn toggle_nav_visibility(
-    game_state: Res<State<GameState>>,
-    mut nav_query: Query<&mut Visibility, With<NavBarRoot>>,
-) {
-    let Ok(mut visibility) = nav_query.single_mut() else {
-        return;
-    };
-
-    *visibility = match game_state.get() {
-        GameState::MainMenu => Visibility::Visible,
-        _ => Visibility::Hidden,
-    };
+fn visibility(state: Res<State<GameState>>, mut roots: Query<&mut Node, With<NavBarClip>>) {
+    for mut node in &mut roots {
+        node.display = if *state.get() == GameState::MainMenu {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
 }

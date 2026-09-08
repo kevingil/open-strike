@@ -12,3 +12,12 @@ pub mod window;
 pub use config::GameConfig;
 pub use game::GameState;
 pub use map::MapSystemPlugin;
+
+pub mod bots;
+pub mod matchplay;
+pub mod weapons;
+
+pub mod assets;
+
+pub mod debug;
+pub mod sound_library;

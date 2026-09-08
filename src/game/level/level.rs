@@ -1,154 +1,366 @@
-use crate::game::config::GameConfig;
-use crate::game::map::{MapConfig, spawn_lighting};
-use crate::game::GameState;
-
 use super::targets;
+use crate::game::{
+    assets::GameAssets,
+    config::GameConfig,
+    map::{spawn_lighting, MapConfig},
+    sound_library::SoundLibrary,
+    GameState,
+};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-
-/// Marker component for level entities (for cleanup)
 #[derive(Component, Clone)]
 pub struct LevelEntity;
-
-/// Resource to track the gameplay map config loading
 #[derive(Resource)]
 pub struct GameplayMapConfigHandle {
     handle: Handle<MapConfig>,
     base_path: String,
 }
-
-/// Resource holding the loaded gameplay map config
 #[derive(Resource, Default)]
 pub struct LoadedGameplayMapConfig {
     pub config: Option<MapConfig>,
     pub base_path: String,
 }
-
-/// Track if level has been initialized this session
 #[derive(Resource, Default)]
-pub struct LevelInitialized(bool);
+pub struct LoadingStatus {
+    pub message: String,
+    scene: Option<Handle<Scene>>,
+    spawned: bool,
+    ready_tick: Option<u64>,
+    started: f32,
+    failed: bool,
+}
+#[derive(Resource, Default)]
+pub struct PhysicsTick(pub u64);
 
 pub struct LevelPlugin;
-
 impl Plugin for LevelPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(targets::TargetsPlugin)
             .init_resource::<LoadedGameplayMapConfig>()
-            .init_resource::<LevelInitialized>()
-            .add_systems(OnEnter(GameState::Playing), start_loading_map_config)
+            .init_resource::<LoadingStatus>()
+            .init_resource::<PhysicsTick>()
             .add_systems(
-                Update,
-                (check_gameplay_map_config_loaded, init_level_when_ready)
-                    .chain()
-                    .run_if(in_state(GameState::Playing)),
+                FixedUpdate,
+                (|mut tick: ResMut<PhysicsTick>| tick.0 += 1).after(PhysicsSet::Writeback),
             )
-            .add_systems(OnExit(GameState::Playing), cleanup_level);
+            .add_systems(
+                OnEnter(GameState::Loading),
+                (cleanup_level, start_loading_map_config).chain(),
+            )
+            .add_systems(Update, load_level.run_if(in_state(GameState::Loading)))
+            .add_systems(OnEnter(GameState::MainMenu), cleanup_level)
+            .add_systems(
+                OnEnter(GameState::LoadFailed),
+                |mut status: ResMut<LoadingStatus>| status.failed = true,
+            );
     }
 }
-
-/// Start loading the map config when entering Playing state
 fn start_loading_map_config(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    game_config: Res<GameConfig>,
-    mut loaded_config: ResMut<LoadedGameplayMapConfig>,
-    mut level_initialized: ResMut<LevelInitialized>,
+    server: Res<AssetServer>,
+    config: Res<GameConfig>,
+    mut loaded: ResMut<LoadedGameplayMapConfig>,
+    mut status: ResMut<LoadingStatus>,
+    time: Res<Time<bevy::time::Real>>,
+    assets: Res<GameAssets>,
+    sounds: Res<SoundLibrary>,
+    mut animations: ResMut<crate::game::player::animation::SharedAnimations>,
 ) {
-    // Reset state for new level
-    loaded_config.config = None;
-    loaded_config.base_path = String::new();
-    level_initialized.0 = false;
-
-    let config_path = game_config.map.config_path();
-    // Derive base path by removing the filename (e.g., "maps/de_dust_2" from "maps/de_dust_2/config.map.ron")
-    let base_path = config_path
-        .rsplit_once('/')
-        .map(|(base, _)| base.to_string())
-        .unwrap_or_else(|| "maps/warehouse".to_string());
-
-    println!("[DEBUG] Loading map config: {}", config_path);
-    println!("[DEBUG] Base path: {}", base_path);
-    println!("[DEBUG] Selected map: {:?}", game_config.map);
-
-    let handle = asset_server.load(config_path);
-    commands.insert_resource(GameplayMapConfigHandle { handle, base_path });
-}
-
-/// Check if gameplay map config is loaded and store it
-fn check_gameplay_map_config_loaded(
-    mut loaded_config: ResMut<LoadedGameplayMapConfig>,
-    handle: Option<Res<GameplayMapConfigHandle>>,
-    configs: Res<Assets<MapConfig>>,
-) {
-    if loaded_config.config.is_some() {
-        return;
+    if status.failed {
+        sounds.retry_failed(&server);
+        if let Some(path) = status
+            .scene
+            .as_ref()
+            .and_then(|scene| server.get_path(scene.id()))
+        {
+            server.reload(path.without_label());
+        }
+        for asset in assets
+            .skins
+            .iter()
+            .chain(assets.arms.iter())
+            .chain(assets.knife_view.iter())
+            .chain(assets.knife_poses.iter())
+            .chain([&assets.gun, &assets.knife_world])
+        {
+            if let Some(path) = server.get_path(asset.id()) {
+                server.reload(path);
+            }
+        }
+        server.reload(config.map.config_path());
+        *animations = crate::game::player::animation::SharedAnimations::default();
     }
-
-    let Some(handle_res) = handle else { return };
-
-    if let Some(config) = configs.get(&handle_res.handle) {
-        loaded_config.config = Some(config.clone());
-        loaded_config.base_path = handle_res.base_path.clone();
-    }
+    *loaded = LoadedGameplayMapConfig::default();
+    *status = LoadingStatus {
+        message: "Loading map and character assets...".into(),
+        started: time.elapsed_secs(),
+        ..default()
+    };
+    let path = config.map.config_path();
+    commands.insert_resource(GameplayMapConfigHandle {
+        handle: server.load(path),
+        base_path: path.rsplit_once('/').unwrap().0.into(),
+    });
 }
-
-/// Initialize the level once the map config is loaded
-fn init_level_when_ready(
+fn load_level(
+    gltfs: Res<Assets<Gltf>>,
+    animations: Res<crate::game::player::animation::SharedAnimations>,
+    runtime: (
+        Res<PhysicsTick>,
+        Res<Time<bevy::time::Real>>,
+        Res<GameConfig>,
+        Res<SoundLibrary>,
+    ),
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    gameplay_config: Res<LoadedGameplayMapConfig>,
-    mut level_initialized: ResMut<LevelInitialized>,
+    server: Res<AssetServer>,
+    configs: Res<Assets<MapConfig>>,
+    handle: Res<GameplayMapConfigHandle>,
+    assets: Res<GameAssets>,
+    mut loaded: ResMut<LoadedGameplayMapConfig>,
+    mut status: ResMut<LoadingStatus>,
+    mut next: ResMut<NextState<GameState>>,
+    colliders: Query<Option<&RapierColliderHandle>, With<Collider>>,
+    pending: Query<(), With<AsyncSceneCollider>>,
+    scene_spawner: Res<SceneSpawner>,
+    instances: Query<&bevy::scene::SceneInstance, With<LevelEntity>>,
+    context: ReadRapierContext,
 ) {
-    // Only init once config is loaded and level hasn't been initialized yet
-    if level_initialized.0 || gameplay_config.config.is_none() {
+    let (tick, time, game, sounds) = runtime;
+    if time.elapsed_secs() - status.started > 60.0 {
+        status.message =
+            "Loading timed out after 60 seconds. Check the required assets and collision geometry."
+                .into();
+        next.set(GameState::LoadFailed);
         return;
     }
-
-    level_initialized.0 = true;
-
-    let config = gameplay_config.config.as_ref().unwrap();
-    let base_path = &gameplay_config.base_path;
-
-    println!("[DEBUG] Level init - Map name: {}", config.name);
-    println!("[DEBUG] Level init - Model: {}", config.model);
-    println!("[DEBUG] Level init - Spawn points: {:?}", config.spawn_points);
-
-    // Set clear color from config
-    if let Some(clear_color) = config.clear_color.as_ref() {
-        commands.insert_resource(ClearColor(clear_color.to_color()));
-    } else {
-        // Default sky color
-        commands.insert_resource(ClearColor(Color::srgb(0.53, 0.81, 0.92)));
+    let error = match server.load_state(handle.handle.id()) {
+        bevy::asset::LoadState::Failed(e) => Some(e.to_string()),
+        _ => assets.failure(&server).or_else(|| sounds.failure(&server)),
+    };
+    if let Some(error) = error {
+        status.message = error;
+        next.set(GameState::LoadFailed);
+        return;
     }
-
-    // Load the map model using the dynamic base path
-    let model_path = format!("{}/{}#Scene0", base_path, config.model);
-
-    let map_transform = config.transform.to_transform();
-
-    // Spawn map with AsyncSceneCollider to auto-generate colliders from mesh geometry
-    commands.spawn((
-        LevelEntity,
-        SceneRoot(asset_server.load(&model_path)),
-        map_transform,
-        // Automatically generate TriMesh colliders for all meshes in the scene
-        AsyncSceneCollider {
-            shape: Some(ComputedColliderShape::TriMesh(TriMeshFlags::MERGE_DUPLICATE_VERTICES)),
-            named_shapes: Default::default(),
-        },
-    ));
-
-    // Fallback floor far below the map - catches player if they fall through geometry
-    commands.spawn((
-        LevelEntity,
-        Collider::cuboid(1000., 0.1, 1000.),
-        Transform::from_xyz(0., -100., 0.),
-    ));
-
-    // Spawn lighting from config
-    spawn_lighting(&mut commands, &config.lighting, LevelEntity);
+    if !status.spawned {
+        let Some(config) = configs.get(&handle.handle) else {
+            return;
+        };
+        if config.spawn_points.is_empty() {
+            status.message = "Map has no spawn points".into();
+            next.set(GameState::LoadFailed);
+            return;
+        }
+        if game.mode == crate::game::config::GameMode::TeamDeathmatch
+            && (config.navigation.is_empty()
+                || config.patrol_destinations.is_empty()
+                || config
+                    .patrol_destinations
+                    .iter()
+                    .any(|&i| i >= config.navigation.len())
+                || [
+                    crate::game::matchplay::Team::Attacker,
+                    crate::game::matchplay::Team::Defender,
+                ]
+                .iter()
+                .any(|team| {
+                    config
+                        .spawn_points
+                        .iter()
+                        .filter(|s| s.team == Some(*team))
+                        .count()
+                        < 3
+                }))
+        {
+            status.message =
+                "Team Deathmatch requires navigation and three spawn points per team".into();
+            next.set(GameState::LoadFailed);
+            return;
+        }
+        loaded.config = Some(config.clone());
+        loaded.base_path = handle.base_path.clone();
+        let scene: Handle<Scene> =
+            server.load(format!("{}/{}#Scene0", handle.base_path, config.model));
+        commands.spawn((
+            LevelEntity,
+            SceneRoot(scene.clone()),
+            config.transform.to_transform(),
+            AsyncSceneCollider {
+                shape: Some(ComputedColliderShape::TriMesh(
+                    TriMeshFlags::MERGE_DUPLICATE_VERTICES,
+                )),
+                named_shapes: default(),
+            },
+        ));
+        spawn_lighting(&mut commands, &config.lighting, LevelEntity);
+        commands.insert_resource(ClearColor(
+            config
+                .clear_color
+                .map(|c| c.to_color())
+                .unwrap_or(Color::srgb(0.53, 0.7, 0.85)),
+        ));
+        status.scene = Some(scene);
+        status.spawned = true;
+        status.message = "Preparing collision and animation bindings...".into();
+        return;
+    }
+    if let Some(scene) = &status.scene {
+        if let bevy::asset::LoadState::Failed(e) = server.load_state(scene.id()) {
+            status.message = e.to_string();
+            next.set(GameState::LoadFailed);
+            return;
+        }
+        if !server.is_loaded_with_dependencies(scene.id()) {
+            return;
+        }
+    }
+    if !assets.ready(&server)
+        || !sounds.ready(&server)
+        || !pending.is_empty()
+        || instances.is_empty()
+        || !instances
+            .iter()
+            .all(|i| scene_spawner.instance_is_ready(**i))
+    {
+        return;
+    }
+    for (index, handle) in assets.skins.iter().enumerate() {
+        if let Some(gltf) = gltfs.get(handle) {
+            if let Some(missing) = crate::game::player::animation::CLIP_NAMES
+                .iter()
+                .find(|name| !gltf.named_animations.contains_key(**name))
+            {
+                status.message = format!("Character {} missing required clip {}", index, missing);
+                next.set(GameState::LoadFailed);
+                return;
+            }
+        }
+    }
+    for handle in assets.arms.iter().chain([&assets.gun]) {
+        let Some(gltf) = gltfs.get(handle) else {
+            return;
+        };
+        if gltf.scenes.is_empty()
+            || ["idle_rifle", "fire_rifle", "reload_rifle"]
+                .iter()
+                .any(|name| !gltf.named_animations.contains_key(*name))
+            || ["Muzzle", "Magazine", "Bolt", "WeaponGrip"]
+                .iter()
+                .any(|name| !gltf.named_nodes.contains_key(*name))
+        {
+            status.message =
+                "Weapon export is missing a required scene, named action or socket".into();
+            next.set(GameState::LoadFailed);
+            return;
+        }
+    }
+    for (label, handle, clips) in [
+        (
+            "Knife Soldier view",
+            &assets.knife_view[0],
+            &["idle_knife", "draw_knife", "slash_knife"][..],
+        ),
+        (
+            "Knife Police view",
+            &assets.knife_view[1],
+            &["idle_knife", "draw_knife", "slash_knife"][..],
+        ),
+        ("Knife world", &assets.knife_world, &[][..]),
+        (
+            "Attacker knife pose",
+            &assets.knife_poses[0],
+            &["idle_knife", "draw_knife", "slash_knife"][..],
+        ),
+        (
+            "Defender knife pose",
+            &assets.knife_poses[1],
+            &["idle_knife", "draw_knife", "slash_knife"][..],
+        ),
+    ] {
+        let Some(gltf) = gltfs.get(handle) else {
+            return;
+        };
+        if gltf.scenes.is_empty()
+            || clips
+                .iter()
+                .any(|name| !gltf.named_animations.contains_key(*name))
+        {
+            status.message = format!("{label} export is missing a scene or required knife clip");
+            next.set(GameState::LoadFailed);
+            return;
+        }
+        if label.starts_with("Knife") && !gltf.named_nodes.contains_key("KnifeGrip") {
+            status.message = format!("{label} export is missing KnifeGrip");
+            next.set(GameState::LoadFailed);
+            return;
+        }
+    }
+    if animations.count == 0
+        || colliders.is_empty()
+        || colliders.iter().any(|handle| handle.is_none())
+    {
+        return;
+    }
+    if let Some(ready_tick) = status.ready_tick {
+        if tick.0 <= ready_tick {
+            return;
+        }
+    } else {
+        status.ready_tick = Some(tick.0);
+        return;
+    }
+    let Ok(physics) = context.single() else {
+        return;
+    };
+    let config = loaded.config.as_ref().unwrap();
+    for spawn in &config.spawn_points {
+        let feet = config
+            .transform
+            .to_transform()
+            .transform_point(spawn.position.to_vec3());
+        if physics
+            .cast_ray(
+                feet + Vec3::Y * 0.5,
+                -Vec3::Y,
+                1.5,
+                true,
+                QueryFilter::default().exclude_sensors(),
+            )
+            .is_none()
+        {
+            status.message = format!("Invalid spawn: no ground below {:?}", feet);
+            next.set(GameState::LoadFailed);
+            return;
+        }
+    }
+    let navigation = crate::game::bots::navigation::build(config, &physics);
+    if game.mode == crate::game::config::GameMode::TeamDeathmatch {
+        for spawn in &config.spawn_points {
+            let Some(node) = navigation.nearest(
+                config
+                    .transform
+                    .to_transform()
+                    .transform_point(spawn.position.to_vec3()),
+            ) else {
+                status.message = "No walkable navigation at spawn".into();
+                next.set(GameState::LoadFailed);
+                return;
+            };
+            if navigation
+                .destinations
+                .iter()
+                .any(|&goal| navigation.path(node, goal).is_empty())
+            {
+                status.message = "Spawn cannot reach every authored combat destination".into();
+                next.set(GameState::LoadFailed);
+                return;
+            }
+        }
+    }
+    commands.insert_resource(navigation);
+    info!("Map ready: {}", config.name);
+    next.set(GameState::Playing);
 }
-
 fn cleanup_level(mut commands: Commands, query: Query<Entity, With<LevelEntity>>) {
     for entity in &query {
         commands.entity(entity).despawn();

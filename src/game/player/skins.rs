@@ -1,7 +1,7 @@
 //! Player skin definitions and shared hitbox configuration.
 //!
-//! All skins use the same skeleton and hitbox for competitive fairness.
-//! Skins are purely cosmetic - they have no gameplay impact.
+//! Each skin has motions baked for its own rest skeleton. Damage zones are shared.
+//! Cosmetic dimensions never determine collision or damage.
 
 use bevy::prelude::*;
 
@@ -109,24 +109,24 @@ pub struct HitboxConfig {
 /// This ensures competitive fairness - all skins have identical hitboxes.
 pub const STANDARD_HITBOX: HitboxConfig = HitboxConfig {
     head: HitboxZone {
-        offset: Vec3::new(0.0, 1.6, 0.0),       // Head at top
+        offset: Vec3::new(0.0, 1.6, 0.0),          // Head at top
         half_extents: Vec3::new(0.15, 0.15, 0.15), // Small head hitbox
         damage_multiplier: 2.5,                    // Headshot bonus
     },
     torso: HitboxZone {
-        offset: Vec3::new(0.0, 1.1, 0.0),       // Torso in middle
+        offset: Vec3::new(0.0, 1.1, 0.0),          // Torso in middle
         half_extents: Vec3::new(0.25, 0.35, 0.15), // Larger torso
         damage_multiplier: 1.0,                    // Standard damage
     },
     legs: HitboxZone {
-        offset: Vec3::new(0.0, 0.45, 0.0),      // Legs at bottom
-        half_extents: Vec3::new(0.2, 0.45, 0.12),  // Leg hitbox
-        damage_multiplier: 0.75,                   // Reduced damage
+        offset: Vec3::new(0.0, 0.45, 0.0),        // Legs at bottom
+        half_extents: Vec3::new(0.2, 0.45, 0.12), // Leg hitbox
+        damage_multiplier: 0.75,                  // Reduced damage
     },
 };
 
 /// Skin definition - purely cosmetic, no gameplay differences.
-/// All skins use the shared skeleton, animations, and hitbox.
+/// Named animation semantics and damage zones are shared; baked rig poses differ.
 #[derive(Clone, Debug)]
 pub struct SkinDefinition {
     /// Unique identifier
@@ -153,14 +153,14 @@ impl Default for SkinRegistry {
                 SkinDefinition {
                     id: SkinId::Soldier,
                     name: "Soldier",
-                    model_path: "models/skins/attacker_default_skin.glb#Scene0",
+                    model_path: "generated/attacker.glb#Scene0",
                     side: PlayerSide::Attacker,
                 },
                 // Police - Defender
                 SkinDefinition {
                     id: SkinId::Police,
                     name: "Police Defender",
-                    model_path: "models/skins/defense_default_skin.glb#Scene0",
+                    model_path: "generated/defender.glb#Scene0",
                     side: PlayerSide::Defender,
                 },
             ],

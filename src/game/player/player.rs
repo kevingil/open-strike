@@ -1,266 +1,283 @@
-use std::f32::consts::TAU;
-
-use bevy::{
-    core_pipeline::bloom::Bloom,
-    prelude::*,
-    render::camera::Exposure,
+use super::{
+    animation::{CharacterRig, PlayerAnimationController},
+    player_model::{HitboxZoneMarker, PlayerModel},
+    skins::{HitboxZoneType, SkinId, STANDARD_HITBOX},
 };
-use bevy_rapier3d::prelude::*;
+use crate::game::{
+    assets::GameAssets,
+    config::{GameConfig, GameMode, PlayerLoadout, PlayerSettings},
+    level::level::LoadedGameplayMapConfig,
+    map::create_camera_components,
+    matchplay::{ActorIntent, Combatant, Team},
+    GameState,
+};
+use bevy::prelude::*;
 use bevy_fps_controller::controller::*;
+use bevy_rapier3d::prelude::*;
 
-use super::animation::{
-    PlayerAnimationController, 
-    detect_animation_state, 
-    load_shared_animations,
-    setup_animation_player,
-    update_player_animations,
-};
-use super::player_shooting::TracerSpawnSpot;
-use super::player_model::{PlayerModel, HitboxZoneMarker, COLLIDER_HEIGHT};
-use super::skins::{SkinRegistry, HitboxZoneType, STANDARD_HITBOX};
-use crate::game::level::level::LoadedGameplayMapConfig;
-use crate::game::math::coordinates::blender_to_world;
-use crate::game::ui::menu::PlayerLoadout;
-use crate::game::GameState;
-
-pub struct PlayerPlugin;
-
-/// Marker component for player-related entities (for cleanup)
+pub const BODY_HEIGHT: f32 = 1.8;
+pub const BODY_RADIUS: f32 = 0.30;
 #[derive(Component)]
 pub struct PlayerEntity;
-
+#[derive(Component)]
+pub struct LocalPlayer;
+#[derive(Component)]
+pub struct WorldCamera;
+pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(crate::game::shooting::tracer::TracerPlugin)
-            // Load shared animations at startup
-            .add_systems(Startup, load_shared_animations)
-            // Animation systems
-            .add_systems(Update, (
-                setup_animation_player,
-                detect_animation_state,
-                update_player_animations,
-                super::player_shooting::update_player,
-                respawn,
-            ).run_if(in_state(GameState::Playing)))
-            .add_systems(OnEnter(GameState::Playing), init_player)
-            .add_systems(OnExit(GameState::Playing), cleanup_player);
+            .add_systems(Startup, super::animation::load_shared_animations)
+            .add_systems(
+                Update,
+                (
+                    super::player_model::bind_animated_visibility,
+                    super::animation::prepare_graphs,
+                    super::animation::setup_animation_player,
+                    super::animation::detect_animation_state,
+                    super::animation::update_player_animations,
+                )
+                    .chain(),
+            )
+            .add_systems(
+                PreUpdate,
+                super::input::human_input
+                    .after(bevy::input::InputSystem)
+                    .run_if(in_state(GameState::Playing)),
+            )
+            .add_systems(
+                OnEnter(GameState::Playing),
+                init_player.run_if(|q: Query<(), With<LocalPlayer>>| q.is_empty()),
+            )
+            .add_systems(OnEnter(GameState::MainMenu), cleanup_player)
+            .add_systems(OnEnter(GameState::Loading), cleanup_player)
+            .add_systems(Update, update_fov)
+            .add_systems(
+                FixedUpdate,
+                super::player_model::sync_hit_zones
+                    .after(crate::game::game::SimulationSet::Movement)
+                    .before(PhysicsSet::SyncBackend)
+                    .run_if(in_state(GameState::Playing)),
+            )
+            .add_systems(
+                PostUpdate,
+                super::player_model::sync_player_model
+                    .before(TransformSystem::TransformPropagate)
+                    .run_if(in_state(GameState::Playing)),
+            );
     }
 }
-
 fn init_player(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
+    assets: Res<GameAssets>,
+    gltfs: Res<Assets<Gltf>>,
+    settings: Res<PlayerSettings>,
     loadout: Res<PlayerLoadout>,
-    skin_registry: Res<SkinRegistry>,
-    gameplay_config: Res<LoadedGameplayMapConfig>,
+    config: Res<GameConfig>,
+    map: Res<LoadedGameplayMapConfig>,
 ) {
-    let fov = 103.0_f32.to_radians();
-    let config = gameplay_config.config.as_ref();
-
-    // Get selected skin definition
-    let skin_def = skin_registry
-        .get(loadout.selected_skin)
-        .expect("Selected skin should exist in registry");
-
-    // Use player spawn from config, with a small Y offset for physics
-    let base_spawn = config
-        .and_then(|c| c.spawn_points.first())
-        .map(|s| s.position.to_vec3())
-        .unwrap_or(Vec3::new(0.0, 10.0, 0.0));
-    let spawn_point = base_spawn + Vec3::new(0.0, 1.625, 10.0);
-
-    println!("[DEBUG] Player spawn - config present: {}", config.is_some());
-    if let Some(c) = config {
-        println!("[DEBUG] Player spawn - map name: {}", c.name);
-        println!("[DEBUG] Player spawn - spawn_points: {:?}", c.spawn_points);
+    let map = map
+        .config
+        .as_ref()
+        .expect("Loading guarantees map configuration");
+    let human_team = if loadout.selected_skin == SkinId::Police {
+        Team::Defender
+    } else {
+        Team::Attacker
+    };
+    let count = if config.mode == GameMode::TeamDeathmatch {
+        6
+    } else {
+        1
+    };
+    for slot in 0..count {
+        let team = if slot < 3 {
+            human_team
+        } else if human_team == Team::Attacker {
+            Team::Defender
+        } else {
+            Team::Attacker
+        };
+        let spawn = map
+            .spawn_points
+            .iter()
+            .filter(|s| s.team.is_none() || s.team == Some(team))
+            .nth(slot % 3)
+            .or_else(|| {
+                map.spawn_points
+                    .iter()
+                    .find(|s| s.team.is_none() || s.team == Some(team))
+            })
+            .expect("Validated team spawn");
+        let feet = map
+            .transform
+            .to_transform()
+            .transform_point(spawn.position.to_vec3());
+        let skin = if team == Team::Attacker {
+            SkinId::Soldier
+        } else {
+            SkinId::Police
+        };
+        let body = commands
+            .spawn((
+                PlayerEntity,
+                LogicalPlayer,
+                Transform::from_translation(feet + Vec3::Y * (BODY_HEIGHT * 0.5 + 0.03)),
+                Visibility::default(),
+                Collider::cylinder(BODY_HEIGHT * 0.5, BODY_RADIUS),
+                RigidBody::Dynamic,
+                Velocity::zero(),
+                LockedAxes::ROTATION_LOCKED,
+                GravityScale(0.0),
+                Sleeping::disabled(),
+                Ccd { enabled: true },
+                Friction {
+                    coefficient: 0.0,
+                    combine_rule: CoefficientCombineRule::Min,
+                },
+                Restitution {
+                    coefficient: 0.0,
+                    combine_rule: CoefficientCombineRule::Min,
+                },
+            ))
+            .insert((
+                Combatant::new(team, slot),
+                super::presentation::PoseHistory::new(
+                    feet + Vec3::Y * (BODY_HEIGHT * 0.5 + 0.03),
+                    spawn.rotation.to_radians(),
+                ),
+                ActorIntent::default(),
+                crate::game::weapons::WeaponState::default(),
+                crate::game::weapons::audio::AudioState::default(),
+                FpsControllerInput {
+                    yaw: spawn.rotation.to_radians(),
+                    ..default()
+                },
+                FpsController {
+                    enable_input: false,
+                    radius: BODY_RADIUS,
+                    height: BODY_HEIGHT,
+                    upright_height: BODY_HEIGHT,
+                    crouch_height: 1.4,
+                    walk_speed: 4.5,
+                    run_speed: 6.2,
+                    crouched_speed: 2.3,
+                    jump_speed: 6.0,
+                    gravity: 19.6,
+                    step_offset: 0.48,
+                    sensitivity: settings.sensitivity * 0.001,
+                    ..default()
+                },
+                CameraConfig {
+                    height_offset: -0.15,
+                },
+            ))
+            .id();
+        if slot == 0 {
+            commands.entity(body).insert(LocalPlayer);
+            if std::env::var_os("CSRS_BOT_PLAYER").is_some() {
+                commands
+                    .entity(body)
+                    .insert(crate::game::bots::BotController::new(0));
+            }
+        } else {
+            commands
+                .entity(body)
+                .insert(crate::game::bots::BotController::new(slot));
+        }
+        let gltf = gltfs.get(&assets.skins[team.index()]).unwrap();
+        commands.spawn((
+            PlayerEntity,
+            PlayerModel {
+                logical_entity: body,
+                is_local_player: slot == 0,
+            },
+            CharacterRig(skin),
+            PlayerAnimationController::default(),
+            SceneRoot(gltf.scenes[0].clone()),
+            Transform::from_translation(feet),
+            Visibility::Inherited,
+        ));
+        for (kind, zone) in [
+            (HitboxZoneType::Head, &STANDARD_HITBOX.head),
+            (HitboxZoneType::Torso, &STANDARD_HITBOX.torso),
+            (HitboxZoneType::Legs, &STANDARD_HITBOX.legs),
+        ] {
+            commands.spawn((
+                Collider::cuboid(
+                    zone.half_extents.x,
+                    zone.half_extents.y,
+                    zone.half_extents.z,
+                ),
+                Sensor,
+                Transform::from_translation(zone.offset - Vec3::Y * (BODY_HEIGHT * 0.5)),
+                HitboxZoneMarker {
+                    zone_type: kind,
+                    player_entity: body,
+                },
+                ChildOf(body),
+            ));
+        }
+        if slot == 0 {
+            let (exposure, bloom, tonemapping, fog) = create_camera_components(map);
+            let mut camera = commands.spawn((
+                PlayerEntity,
+                WorldCamera,
+                SpatialListener::new(0.2),
+                Camera3d::default(),
+                Camera {
+                    hdr: true,
+                    ..default()
+                },
+                Projection::Perspective(PerspectiveProjection {
+                    fov: 2.0 * ((settings.fov.to_radians() * 0.5).tan() / (16.0 / 9.0)).atan(),
+                    near: 0.05,
+                    ..default()
+                }),
+                RenderPlayer {
+                    logical_entity: body,
+                },
+                Transform::default(),
+                exposure,
+                bloom,
+                tonemapping,
+            ));
+            if let Some(fog) = fog {
+                camera.insert(fog);
+            }
+            let camera = camera.id();
+            if std::env::var_os("CSRS_NO_VIEWMODEL").is_none() {
+                crate::game::weapons::viewmodel::spawn(
+                    &mut commands,
+                    &assets,
+                    &gltfs,
+                    body,
+                    camera,
+                    loadout.selected_skin,
+                );
+            }
+        }
     }
-    println!("[DEBUG] Player spawn - base_spawn: {:?}", base_spawn);
-    println!("[DEBUG] Player spawn - final spawn_point: {:?}", spawn_point);
-
-    // Entity 1: LogicalPlayer (Physics body - invisible)
-    let logical_entity = commands
-        .spawn((
-            PlayerEntity,
-            Collider::cylinder(COLLIDER_HEIGHT / 2.0, 0.5),
-            Friction {
-                coefficient: 0.0,
-                combine_rule: CoefficientCombineRule::Min,
-            },
-            Restitution {
-                coefficient: 0.0,
-                combine_rule: CoefficientCombineRule::Min,
-            },
-            ActiveEvents::COLLISION_EVENTS,
-            Velocity::zero(),
-            RigidBody::Dynamic,
-            Sleeping::disabled(),
-            LockedAxes::ROTATION_LOCKED,
-            AdditionalMassProperties::Mass(1.0),
-            GravityScale(0.0),
-            Ccd { enabled: true },
-            Transform::from_translation(spawn_point),
-        ))
-        .insert((
-            LogicalPlayer,
-            FpsControllerInput {
-                pitch: -TAU / 12.0,
-                yaw: TAU * 5.0 / 8.0,
-                ..default()
-            },
-            FpsController {
-                air_acceleration: 80.0,
-                ..default()
-            },
-            CameraConfig {
-                height_offset: -0.5,
-            },
-        ))
-        .id();
-
-    // Gun model - will be child of camera
-    let gun_model = asset_server.load("models/weapons/ak_47.glb#Scene0");
-    let gun_entity = commands.spawn((PlayerEntity, SceneRoot(gun_model))).id();
-
-    // Viewmodel light - illuminates the weapon so it's always visible
-    let viewmodel_light_entity = commands
-        .spawn((
-            PlayerEntity,
-            PointLight {
-                color: Color::WHITE,
-                intensity: 50000.0,  // Adjust for brightness
-                range: 3.0,
-                shadows_enabled: false,  // No shadows from viewmodel light
-                ..default()
-            },
-            Transform::from_xyz(0.0, 0.0, -0.5),  // Slightly in front of camera
-        ))
-        .id();
-
-    // Tracer spawn spot - child of camera
-    let spawn_spot = blender_to_world(Vec3::new(0.530462, 2.10557, -0.466568));
-    let tracer_spawn_entity = commands
-        .spawn((
-            PlayerEntity,
-            Transform::from_translation(spawn_spot),
-            Visibility::default(),
-            TracerSpawnSpot,
-        ))
-        .id();
-
-    // Post-processing settings from config
-    let bloom_intensity = config.map(|c| c.post_process.bloom_intensity).unwrap_or(0.05);
-    let tonemapping = config
-        .map(|c| c.post_process.tonemapping.to_bevy())
-        .unwrap_or(bevy::core_pipeline::tonemapping::Tonemapping::TonyMcMapface);
-    let exposure_ev100 = config.map(|c| c.camera.exposure_ev100).unwrap_or(15.0);
-
-    // Entity 2: RenderPlayer (Camera - first person view with post-processing)
-    commands
-        .spawn((
-            PlayerEntity,
-            Camera3d::default(),
-            Camera {
-                order: 0,
-                hdr: true, // Required for bloom
-                ..default()
-            },
-            Projection::Perspective(PerspectiveProjection {
-                fov,
-                ..default()
-            }),
-            Exposure { ev100: exposure_ev100 },
-            RenderPlayer { logical_entity },
-            Bloom {
-                intensity: bloom_intensity,
-                low_frequency_boost: 0.2,
-                low_frequency_boost_curvature: 0.7,
-                high_pass_frequency: 1.0,
-                ..default()
-            },
-            tonemapping,
-        ))
-        .add_children(&[tracer_spawn_entity, gun_entity, viewmodel_light_entity]);
-
-    // Entity 3: PlayerModel (Visible character mesh)
-    // Load the selected skin model
-    let skin_model = asset_server.load(skin_def.model_path);
-    let player_model_entity = commands.spawn((
-        PlayerEntity,
-        PlayerModel {
-            logical_entity,
-            is_local_player: true,
-        },
-        PlayerAnimationController::default(),
-        SceneRoot(skin_model),
-        Transform::default(),
-        Visibility::Hidden, // Hidden for local player in first-person
-    )).id();
-
-    // Spawn hitbox colliders as children of the player model
-    // These are sensor colliders (don't affect physics, only for hit detection)
-    spawn_hitbox_colliders(&mut commands, player_model_entity, logical_entity);
 }
-
-/// Spawn hitbox sensor colliders as children of the player model entity.
-/// Uses the STANDARD_HITBOX configuration for competitive fairness.
-fn spawn_hitbox_colliders(
-    commands: &mut Commands,
-    player_model_entity: Entity,
-    logical_entity: Entity,
-) {
-    // Spawn hitbox for each zone type
-    let zones = [
-        (HitboxZoneType::Head, &STANDARD_HITBOX.head),
-        (HitboxZoneType::Torso, &STANDARD_HITBOX.torso),
-        (HitboxZoneType::Legs, &STANDARD_HITBOX.legs),
-    ];
-
-    for (zone_type, zone) in zones {
-        let hitbox_entity = commands.spawn((
-            PlayerEntity,
-            // Sensor collider - doesn't affect physics, only for raycasting
-            Collider::cuboid(
-                zone.half_extents.x,
-                zone.half_extents.y,
-                zone.half_extents.z,
-            ),
-            Sensor,
-            // Position relative to player model
-            Transform::from_translation(zone.offset),
-            // Marker for hit detection
-            HitboxZoneMarker {
-                zone_type,
-                player_entity: logical_entity,
-            },
-        )).id();
-
-        // Make hitbox a child of the player model so it moves with it
-        commands.entity(player_model_entity).add_child(hitbox_entity);
-    }
-}
-
 fn cleanup_player(mut commands: Commands, query: Query<Entity, With<PlayerEntity>>) {
     for entity in &query {
         commands.entity(entity).despawn();
     }
 }
 
-fn respawn(
-    mut query: Query<(&mut Transform, &mut Velocity), With<LogicalPlayer>>,
-    gameplay_config: Res<LoadedGameplayMapConfig>,
+fn update_fov(
+    settings: Res<PlayerSettings>,
+    windows: Query<&Window>,
+    mut cameras: Query<&mut Projection, With<WorldCamera>>,
 ) {
-    let config = gameplay_config.config.as_ref();
-    let base_spawn = config
-        .and_then(|c| c.spawn_points.first())
-        .map(|s| s.position.to_vec3())
-        .unwrap_or(Vec3::new(0.0, 2.0, 0.0));
-    let spawn_point = base_spawn + Vec3::new(0.0, 1.625, 0.0);
-    
-    for (mut transform, mut velocity) in &mut query {
-        if transform.translation.y > -50.0 {
-            continue;
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let aspect = window.width() / window.height().max(1.0);
+    for mut projection in &mut cameras {
+        if let Projection::Perspective(ref mut p) = *projection {
+            p.fov =
+                2.0 * ((settings.fov.clamp(60.0, 120.0).to_radians() * 0.5).tan() / aspect).atan();
         }
-        velocity.linvel = Vec3::ZERO;
-        transform.translation = spawn_point;
     }
 }
