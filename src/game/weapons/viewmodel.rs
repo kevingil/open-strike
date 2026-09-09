@@ -116,12 +116,14 @@ fn profile(id: WeaponId) -> Transform {
         }
     } else {
         // The AKM reference rig is authored in source units around its camera.
-        Transform::from_xyz(0.0, 0.04, -0.10)
-            .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
+        Transform::from_xyz(-0.005, -0.05, 0.0)
+            .with_rotation(
+                Quat::from_rotation_x(2_f32.to_radians())
+                    * Quat::from_rotation_y(std::f32::consts::PI),
+            )
             .with_scale(Vec3::splat(0.025))
     }
 }
-
 
 pub fn spawn(
     commands: &mut Commands,
@@ -199,6 +201,7 @@ pub fn spawn(
                 ..default()
             }),
             Exposure { ev100: 12.0 },
+            AmbientLight::default(),
             RenderPlayer {
                 logical_entity: actor,
             },
@@ -480,7 +483,8 @@ pub struct ViewModelLight(Entity);
 
 pub fn frame_camera(
     weapons: Query<&WeaponState>,
-    mut cameras: Query<(&ViewModelCamera, &mut Projection)>,
+    ambient: Res<AmbientLight>,
+    mut cameras: Query<(&ViewModelCamera, &mut Projection, &mut AmbientLight)>,
     mut lights: Query<(&ViewModelLight, &mut PointLight)>,
 ) {
     for (owner, mut light) in &mut lights {
@@ -488,15 +492,29 @@ pub fn frame_camera(
             // The rifle's glove seams and receiver need a camera-local key;
             // world sunlight belongs to layer 0 and cannot light these meshes.
             light.intensity = if weapon.active == WeaponId::AK47 {
-                120_000.0
+                70_000.0
             } else {
                 1000.0
             };
+            light.radius = if weapon.active == WeaponId::AK47 {
+                0.25
+            } else {
+                0.0
+            };
         }
     }
-    for (camera, mut projection) in &mut cameras {
+    for (camera, mut projection, mut lighting) in &mut cameras {
         if let (Ok(weapon), Projection::Perspective(p)) = (weapons.get(camera.0), &mut *projection)
         {
+            *lighting = if weapon.active == WeaponId::AK47 {
+                AmbientLight {
+                    color: Color::WHITE,
+                    brightness: 4000.0,
+                    ..default()
+                }
+            } else {
+                ambient.clone()
+            };
             p.fov = if weapon.active.is_knife() {
                 // Keep both hands framed on narrower windows as well as 16:9.
                 let vertical = 55_f32.to_radians();
