@@ -203,9 +203,22 @@ Rebuild these variants **after** the base AK/knife exporters:
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/export_viewmodels.py
 ```
 
-The base `ak_view.glb` and `knife_view.glb` remain motion inputs. The new exporter
-rebuilds all four character/weapon variants without overwriting those inputs or
-the supplied reference. Its explicit bone mapping retains reference UVs and
-textures, fits gloves to the existing weapon contacts, continues the open upper
-sleeves behind the camera, and restores head-relative weapon sockets after the
-Blender round trip. See `ASSET_LICENSES.md` for attribution and modifications.
+The AK variants retain the fitted reference arm geometry and authored rifle actions.
+Knife variants preserve the supplied model's native skeleton, skin weights, wrist
+poses and animated knife attachment. `tools/export_reference_knife.py` exports
+both knife choices for Soldier and Police, plus the reference blade's world model
+and inventory/HUD icons. Its explicit source ranges are idle frames 0–40, slash
+60–80 and draw 123–145; slash timing matches the gameplay contact window.
+
+Choose **Default Knife** or **Reference Knife** under **Load Out → Equipment →
+Knife · Both teams**. The selection applies to both characters, survives respawn,
+and is equipped with `3` (or previous weapon). Weapon damage and reach are shared.
+To regenerate just the knife assets:
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/export_reference_knife.py
+```
+
+Add `CSRS_REFERENCE_KNIFE=1` to the native knife capture command to inspect the
+reference blade, and `CSRS_TEAM=defender` to inspect Police. See
+`ASSET_LICENSES.md` for attribution and modifications.
