@@ -68,6 +68,7 @@ pub(super) enum LoadoutButton {
     Slot(Slot),
     Category(BuyCategory),
     Weapon(WeaponId),
+    Melee(WeaponId),
     Clear,
 }
 #[derive(Component)]
@@ -162,6 +163,19 @@ fn setup(mut commands: Commands, previews: Res<CharacterPreviews>, server: Res<A
                                     equipment.spawn(label("Armor · Fixed", 11., MUTED));
                                     for name in PRESET_ARMOR {
                                         spawn_preset(equipment, name);
+                                    }
+                                    equipment.spawn(label("Knife · Both teams", 11., MUTED));
+                                    for knife in [WeaponId::DefaultKnife, WeaponId::ReferenceKnife]
+                                    {
+                                        equipment
+                                            .spawn((
+                                                LoadoutButton::Melee(knife),
+                                                Button,
+                                                cell(),
+                                                BackgroundColor(Color::NONE),
+                                                BorderColor(Color::NONE),
+                                            ))
+                                            .with_child(label(knife.name(), 12., WHITE));
                                     }
                                 });
                                 for category in BuyCategory::ALL {
@@ -398,6 +412,7 @@ fn interact(
                     Some(weapon),
                 );
             }
+            LoadoutButton::Melee(knife) => loadout.melee_weapon = knife,
             LoadoutButton::Clear => {
                 let slot = editor.slot();
                 loadout
@@ -458,6 +473,7 @@ fn refresh(
             LoadoutButton::Weapon(weapon) => {
                 side.slots(selected.category)[selected.index] == Some(weapon)
             }
+            LoadoutButton::Melee(knife) => loadout.melee_weapon == knife,
             LoadoutButton::Clear => false,
         };
         background.0 = if active {

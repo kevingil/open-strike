@@ -190,12 +190,15 @@ reload through normal weapon intents. This is opt-in rendering diagnostics.
 
 ### Dedicated first-person arms
 
-Soldier and Police now use separate first-person sleeve/glove variants derived
-from the supplied DJMaesen arm model, selected by the equipped `SkinId` for both
-AK and knife. The full-body character mesh is not rendered as first-person arms.
-The existing AK fire, magazine, charging-handle and reload wrist motion is
-retained. First-person elbow placement is authored separately; world characters
-and weapon attachments keep their existing assets.
+AK first-person views use the supplied **AKM reload animation** model by Vlasov
+Daniil: its rifle, gloves, sleeve mesh, twist joints and original reload channels.
+Knife views use the separate DJMaesen reference. Both select a tint from `SkinId`;
+world characters and their AK attachments retain the existing assets.
+
+The AK camera transform and 55-degree vertical FOV stay fixed throughout reload.
+The source's 4.35-second motion is retimed to the existing 2.5-second gameplay
+reload. Idle holds the source entry pose; fire adds a short whole-rig recoil.
+Local magazine sounds follow the reference; world reload sounds remain unchanged.
 
 Rebuild these variants **after** the base AK/knife exporters:
 
@@ -203,9 +206,27 @@ Rebuild these variants **after** the base AK/knife exporters:
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/export_viewmodels.py
 ```
 
-The base `ak_view.glb` and `knife_view.glb` remain motion inputs. The new exporter
-rebuilds all four character/weapon variants without overwriting those inputs or
-the supplied reference. Its explicit bone mapping retains reference UVs and
-textures, fits gloves to the existing weapon contacts, continues the open upper
-sleeves behind the camera, and restores head-relative weapon sockets after the
-Blender round trip. See `ASSET_LICENSES.md` for attribution and modifications.
+`tools/export_rifle_view.py` converts the AKM GLB directly, preserving its weights,
+inverse bind matrices and animation samples. It repairs the supplied arms' baked
+whole-mesh scale without stretching individual hand/finger segments. To rebuild
+only AK views, run it with Blender as above. Its optional `-- --existing-rifle`
+argument fits the older AK mesh and two magazine copies to the reference rig;
+the default retains the complete reference model to match its proportions.
+Knife variants preserve the supplied model's native skeleton, skin weights, wrist
+poses and animated knife attachment. `tools/export_reference_knife.py` exports
+both knife choices for Soldier and Police, plus the reference blade's world model
+and inventory/HUD icons. Its explicit source ranges are idle frames 0–40, slash
+60–80 and draw 123–145; slash timing matches the gameplay contact window.
+
+Choose **Default Knife** or **Reference Knife** under **Load Out → Equipment →
+Knife · Both teams**. The selection applies to both characters, survives respawn,
+and is equipped with `3` (or previous weapon). Weapon damage and reach are shared.
+To regenerate just the knife assets:
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/export_reference_knife.py
+```
+
+Add `CSRS_REFERENCE_KNIFE=1` to the native knife capture command to inspect the
+reference blade, and `CSRS_TEAM=defender` to inspect Police. See
+`ASSET_LICENSES.md` for attribution and modifications.

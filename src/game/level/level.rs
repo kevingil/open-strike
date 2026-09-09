@@ -80,8 +80,13 @@ fn start_loading_map_config(
             .iter()
             .chain(assets.arms.iter())
             .chain(assets.knife_view.iter())
+            .chain(assets.reference_knife_view.iter())
             .chain(assets.knife_poses.iter())
-            .chain([&assets.gun, &assets.knife_world])
+            .chain([
+                &assets.gun,
+                &assets.knife_world,
+                &assets.reference_knife_world,
+            ])
         {
             if let Some(path) = server.get_path(asset.id()) {
                 server.reload(path);
@@ -266,6 +271,21 @@ fn load_level(
             &["idle_knife", "draw_knife", "slash_knife"][..],
         ),
         ("Knife world", &assets.knife_world, &[][..]),
+        (
+            "Knife reference world",
+            &assets.reference_knife_world,
+            &[][..],
+        ),
+        (
+            "Knife reference Soldier view",
+            &assets.reference_knife_view[0],
+            &["idle_knife", "draw_knife", "slash_knife"][..],
+        ),
+        (
+            "Knife reference Police view",
+            &assets.reference_knife_view[1],
+            &["idle_knife", "draw_knife", "slash_knife"][..],
+        ),
         (
             "Attacker knife pose",
             &assets.knife_poses[0],

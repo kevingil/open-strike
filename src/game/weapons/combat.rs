@@ -58,6 +58,7 @@ pub fn simulate_weapons(
         }
         if let Some(selection) = intent.selection.take() {
             let target = match selection {
+                WeaponSelection::Select(id) if id.is_knife() => weapon.melee_weapon,
                 WeaponSelection::Select(id) => id,
                 WeaponSelection::Previous => weapon.previous,
             };
@@ -80,7 +81,7 @@ pub fn simulate_weapons(
             intent.reload = false;
             continue;
         }
-        if weapon.active == WeaponId::DefaultKnife {
+        if weapon.active.is_knife() {
             intent.reload = false;
             if weapon.knife_remaining > 0.0 {
                 let previous = weapon.knife_remaining;
@@ -118,7 +119,7 @@ pub fn simulate_weapons(
                                     entity,
                                     zone.player_entity,
                                     KNIFE.damage,
-                                    WeaponId::DefaultKnife,
+                                    weapon.active,
                                     false,
                                 ));
                             }

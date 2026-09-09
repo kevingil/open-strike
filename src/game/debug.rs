@@ -235,6 +235,9 @@ fn configure(
     if let Ok(score) = std::env::var("CSRS_SCORE_LIMIT") {
         config.match_settings.score_limit = score.parse().ok();
     }
+    if std::env::var_os("CSRS_REFERENCE_KNIFE").is_some() {
+        loadout.melee_weapon = crate::game::config::WeaponId::ReferenceKnife;
+    }
     if std::env::var("CSRS_TEAM").is_ok_and(|s| s == "defender") {
         loadout.selected_skin = crate::game::player::skins::SkinId::Police;
     }

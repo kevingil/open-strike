@@ -13,6 +13,10 @@ use bevy::{
     },
 };
 use bevy_fps_controller::controller::RenderPlayer;
+
+// Stretch the native 1.33-second holding loop to four seconds.
+const KNIFE_IDLE_SPEED: f32 = 1.0 / 3.0;
+
 #[derive(Component)]
 pub struct ViewModel {
     actor: Entity,
@@ -27,6 +31,7 @@ pub struct ViewModel {
     last_shot: u64,
     nodes: Vec<AnimationNodeIndex>,
     reload_duration: f32,
+    slash_duration: f32,
 }
 #[derive(Component)]
 pub struct LayersBound;
@@ -101,12 +106,25 @@ pub fn animate_flashes(
 
 /// Framing is independent of world FOV and hit-query origins.
 fn profile(id: WeaponId) -> Transform {
-    let offset = match id {
-        WeaponId::AK47 => Vec3::new(0.06, -1.65, -0.30),
-        WeaponId::DefaultKnife => Vec3::new(0.0, -1.56, -0.14),
-    };
-    Transform::from_translation(offset).with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
+    if id.is_knife() {
+        // Native reference centimetres, viewed from (0, 10, 32) in Blender.
+        let tilt = Quat::from_rotation_x((13.0_f32 / 40.0).atan());
+        Transform {
+            translation: tilt * Vec3::new(0.0, -0.32, -0.10) + Vec3::Y * 0.075,
+            rotation: tilt * Quat::from_rotation_y(std::f32::consts::PI),
+            scale: Vec3::splat(0.01),
+        }
+    } else {
+        // The AKM reference rig is authored in source units around its camera.
+        Transform::from_xyz(-0.005, -0.05, 0.0)
+            .with_rotation(
+                Quat::from_rotation_x(2_f32.to_radians())
+                    * Quat::from_rotation_y(std::f32::consts::PI),
+            )
+            .with_scale(Vec3::splat(0.025))
+    }
 }
+
 pub fn spawn(
     commands: &mut Commands,
     assets: &GameAssets,
@@ -120,10 +138,11 @@ pub fn spawn(
         SkinId::Police => 1,
     };
     let mut roots = Vec::new();
-    for weapon_id in [WeaponId::AK47, WeaponId::DefaultKnife] {
+    for weapon_id in WeaponId::all() {
         let handle = match weapon_id {
             WeaponId::AK47 => &assets.arms[skin_index],
             WeaponId::DefaultKnife => &assets.knife_view[skin_index],
+            WeaponId::ReferenceKnife => &assets.reference_knife_view[skin_index],
         };
         let framing = profile(weapon_id);
         roots.push(
@@ -144,6 +163,7 @@ pub fn spawn(
                         last_shot: 0,
                         nodes: Vec::new(),
                         reload_duration: 0.0,
+                        slash_duration: 0.0,
                     },
                     Visibility::Hidden,
                 ))
@@ -158,6 +178,7 @@ pub fn spawn(
                 shadows_enabled: false,
                 ..default()
             },
+            ViewModelLight(actor),
             Transform::from_xyz(-0.3, 0.5, -0.2),
             RenderLayers::layer(1),
         ))
@@ -165,6 +186,7 @@ pub fn spawn(
     commands
         .spawn((
             PlayerEntity,
+            ViewModelCamera(actor),
             Camera3d::default(),
             Camera {
                 order: 1,
@@ -179,6 +201,7 @@ pub fn spawn(
                 ..default()
             }),
             Exposure { ev100: 12.0 },
+            AmbientLight::default(),
             RenderPlayer {
                 logical_entity: actor,
             },
@@ -220,12 +243,14 @@ pub fn bind_scenes(
         };
         for entity in descendants.iter_descendants(character) {
             if names.get(entity).is_ok_and(|n| n.as_str() == socket) {
-                for weapon_id in [WeaponId::AK47, WeaponId::DefaultKnife] {
-                    if showcase.is_some() && weapon_id == WeaponId::DefaultKnife {
+                for weapon_id in WeaponId::all() {
+                    if showcase.is_some() && weapon_id.is_knife() {
                         continue;
                     }
                     let handle = if weapon_id == WeaponId::AK47 {
                         &assets.gun
+                    } else if weapon_id == WeaponId::ReferenceKnife {
+                        &assets.reference_knife_world
                     } else {
                         &assets.knife_world
                     };
@@ -248,6 +273,7 @@ pub fn bind_scenes(
                             last_shot: 0,
                             nodes: Vec::new(),
                             reload_duration: 0.0,
+                            slash_duration: 0.0,
                         },
                         if weapon_id == WeaponId::AK47 {
                             Visibility::Inherited
@@ -268,7 +294,7 @@ pub fn bind_scenes(
                 .insert(RenderLayers::layer(if model.first_person { 1 } else { 0 }));
         }
         // World knife motion belongs to the character's upper-body animation.
-        if model.weapon_id == WeaponId::DefaultKnife && !model.first_person {
+        if model.weapon_id.is_knife() && !model.first_person {
             if descendants.iter_descendants(root).next().is_some() {
                 commands
                     .entity(root)
@@ -280,6 +306,7 @@ pub fn bind_scenes(
             (WeaponId::AK47, true) => &assets.arms[model.skin_index],
             (WeaponId::AK47, false) => &assets.gun,
             (WeaponId::DefaultKnife, _) => &assets.knife_view[model.skin_index],
+            (WeaponId::ReferenceKnife, _) => &assets.reference_knife_view[model.skin_index],
         };
         let Some(gltf) = gltfs.get(handle) else {
             continue;
@@ -302,6 +329,10 @@ pub fn bind_scenes(
         else {
             continue;
         };
+        model.slash_duration = clips_store
+            .get(&clips[1])
+            .map(AnimationClip::duration)
+            .unwrap_or(0.0);
         model.reload_duration = clips_store
             .get(&clips[2])
             .map(AnimationClip::duration)
@@ -313,6 +344,11 @@ pub fn bind_scenes(
             // leaves an untracked loop blending over every fire/reload action.
             transitions
                 .play(&mut animation, nodes[0], std::time::Duration::ZERO)
+                .set_speed(if model.weapon_id.is_knife() {
+                    KNIFE_IDLE_SPEED
+                } else {
+                    1.0
+                })
                 .repeat();
         }
         commands
@@ -378,7 +414,7 @@ pub fn animate_viewmodel(
             model.last_shot = weapon.shots;
             continue;
         }
-        if model.weapon_id == WeaponId::DefaultKnife {
+        if model.weapon_id.is_knife() {
             if !model.was_visible || model.last_equip != weapon.equips {
                 transitions
                     .play(&mut player, model.nodes[2], std::time::Duration::ZERO)
@@ -387,7 +423,7 @@ pub fn animate_viewmodel(
             } else if model.last_action != weapon.slashes {
                 transitions
                     .play(&mut player, model.nodes[1], std::time::Duration::ZERO)
-                    .set_speed((17.0 / 30.0) / (KNIFE.windup + KNIFE.recovery))
+                    .set_speed(model.slash_duration / (KNIFE.windup + KNIFE.recovery))
                     .replay();
             } else if player.all_finished() {
                 transitions
@@ -396,6 +432,7 @@ pub fn animate_viewmodel(
                         model.nodes[0],
                         std::time::Duration::from_secs_f32(0.08),
                     )
+                    .set_speed(KNIFE_IDLE_SPEED)
                     .repeat();
             }
             model.last_action = weapon.slashes;
@@ -435,5 +472,57 @@ pub fn animate_viewmodel(
         }
         model.last_reload = reloading;
         model.last_shot = weapon.shots;
+    }
+}
+
+#[derive(Component)]
+pub struct ViewModelCamera(Entity);
+
+#[derive(Component)]
+pub struct ViewModelLight(Entity);
+
+pub fn frame_camera(
+    weapons: Query<&WeaponState>,
+    ambient: Res<AmbientLight>,
+    mut cameras: Query<(&ViewModelCamera, &mut Projection, &mut AmbientLight)>,
+    mut lights: Query<(&ViewModelLight, &mut PointLight)>,
+) {
+    for (owner, mut light) in &mut lights {
+        if let Ok(weapon) = weapons.get(owner.0) {
+            // The rifle's glove seams and receiver need a camera-local key;
+            // world sunlight belongs to layer 0 and cannot light these meshes.
+            light.intensity = if weapon.active == WeaponId::AK47 {
+                70_000.0
+            } else {
+                1000.0
+            };
+            light.radius = if weapon.active == WeaponId::AK47 {
+                0.25
+            } else {
+                0.0
+            };
+        }
+    }
+    for (camera, mut projection, mut lighting) in &mut cameras {
+        if let (Ok(weapon), Projection::Perspective(p)) = (weapons.get(camera.0), &mut *projection)
+        {
+            *lighting = if weapon.active == WeaponId::AK47 {
+                AmbientLight {
+                    color: Color::WHITE,
+                    brightness: 4000.0,
+                    ..default()
+                }
+            } else {
+                ambient.clone()
+            };
+            p.fov = if weapon.active.is_knife() {
+                // Keep both hands framed on narrower windows as well as 16:9.
+                let vertical = 55_f32.to_radians();
+                vertical.max(2.0 * ((vertical * 0.5).tan() * (16.0 / 9.0) / p.aspect_ratio).atan())
+            } else {
+                // Hold the same lens throughout the authored reload.
+                55_f32.to_radians()
+            };
+        }
     }
 }

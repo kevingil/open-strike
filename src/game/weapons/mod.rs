@@ -47,6 +47,7 @@ pub const KNIFE: KnifeDefinition = KnifeDefinition {
 pub struct WeaponState {
     pub active: WeaponId,
     pub previous: WeaponId,
+    pub melee_weapon: WeaponId,
     pub equip_remaining: f32,
     pub knife_remaining: f32,
     pub slashes: u64,
@@ -65,6 +66,7 @@ impl Default for WeaponState {
         Self {
             active: WeaponId::AK47,
             previous: WeaponId::DefaultKnife,
+            melee_weapon: WeaponId::DefaultKnife,
             equip_remaining: 0.0,
             knife_remaining: 0.0,
             slashes: 0,
@@ -112,6 +114,7 @@ impl Plugin for WeaponPlugin {
                     viewmodel::bind_muzzles,
                     viewmodel::animate_viewmodel.run_if(in_state(GameState::Playing)),
                     viewmodel::animate_flashes,
+                    viewmodel::frame_camera,
                 )
                     .chain(),
             )

@@ -16,6 +16,7 @@ struct Cues {
     knife_draw: Handle<AudioSource>,
     knife_slash: Handle<AudioSource>,
     reload: [(f32, Handle<AudioSource>); 3],
+    view_reload: [(f32, Handle<AudioSource>); 2],
     hit: [Handle<AudioSource>; 5],
     step: [Handle<AudioSource>; 4],
     walk_loop: Option<Handle<AudioSource>>,
@@ -89,6 +90,11 @@ fn prepare(mut commands: Commands, mut library: ResMut<SoundLibrary>, server: Re
             (18.0 / 99.0, recording("weapons/ak47_clipout")),
             (65.0 / 99.0, recording("weapons/ak47_clipin")),
             (73.0 / 99.0, recording("weapons/ak47_boltpull")),
+        ],
+        // Reference AKM: magazine knock-out and seating, with no bolt pull.
+        view_reload: [
+            (35.0 / 130.5, recording("weapons/ak47_clipout")),
+            (65.0 / 130.5, recording("weapons/ak47_clipin")),
         ],
         hit: [
             recording("physics/flesh_impact_bullet1"),
@@ -167,7 +173,7 @@ fn sounds(
         if actor.alive() && (!state.alive || state.equips != weapon.equips) {
             play(
                 &mut commands,
-                if weapon.active == WeaponId::DefaultKnife {
+                if weapon.active.is_knife() {
                     cues.knife_draw.clone()
                 } else {
                     cues.draw.clone()
@@ -197,7 +203,12 @@ fn sounds(
                 -1.0
             };
             let elapsed = AK47.reload_seconds - weapon.reload_remaining;
-            for (fraction, clip) in &cues.reload {
+            let reload_cues = if Some(entity) == local {
+                &cues.view_reload[..]
+            } else {
+                &cues.reload[..]
+            };
+            for (fraction, clip) in reload_cues {
                 let at = fraction * AK47.reload_seconds;
                 if previous < at && elapsed >= at {
                     let sound = play(

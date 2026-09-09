@@ -6,6 +6,8 @@ pub struct GameAssets {
     pub arms: [Handle<Gltf>; 2],
     pub knife_view: [Handle<Gltf>; 2],
     pub knife_world: Handle<Gltf>,
+    pub reference_knife_view: [Handle<Gltf>; 2],
+    pub reference_knife_world: Handle<Gltf>,
     pub knife_poses: [Handle<Gltf>; 2],
 }
 pub fn load_assets(mut commands: Commands, server: Res<AssetServer>) {
@@ -20,6 +22,11 @@ pub fn load_assets(mut commands: Commands, server: Res<AssetServer>) {
             server.load("generated/knife_view_police.glb"),
         ],
         knife_world: server.load("generated/knife_world.glb"),
+        reference_knife_view: [
+            server.load("generated/reference_knife_view_soldier.glb"),
+            server.load("generated/reference_knife_view_police.glb"),
+        ],
+        reference_knife_world: server.load("generated/reference_knife_world.glb"),
         knife_poses: [
             server.load("generated/knife_pose_attacker.glb"),
             server.load("generated/knife_pose_defender.glb"),
@@ -40,7 +47,8 @@ impl GameAssets {
             .iter()
             .chain(self.arms.iter())
             .chain(self.knife_view.iter())
-            .chain([&self.gun, &self.knife_world])
+            .chain(self.reference_knife_view.iter())
+            .chain([&self.gun, &self.knife_world, &self.reference_knife_world])
             .chain(self.knife_poses.iter())
             .all(|h| server.is_loaded_with_dependencies(h.id()))
     }
@@ -49,7 +57,8 @@ impl GameAssets {
             .iter()
             .chain(self.arms.iter())
             .chain(self.knife_view.iter())
-            .chain([&self.gun, &self.knife_world])
+            .chain(self.reference_knife_view.iter())
+            .chain([&self.gun, &self.knife_world, &self.reference_knife_world])
             .chain(self.knife_poses.iter())
             .find_map(|h| {
                 if let bevy::asset::LoadState::Failed(e) = server.load_state(h.id()) {

@@ -45,6 +45,7 @@ pub fn spawn(parent: &mut ChildSpawnerCommands, art: &HudArt) {
 }
 pub fn update(
     player: Query<&WeaponState, With<LocalPlayer>>,
+    art: Res<HudArt>,
     mut slots: Query<(&Slot, Option<&mut ImageNode>, Option<&mut TextColor>)>,
     mut names: Query<&mut Text, With<SelectedName>>,
     mut ammo: Query<&mut Visibility, With<AmmoOnly>>,
@@ -53,9 +54,15 @@ pub fn update(
         return;
     };
     for (slot, image, color) in &mut slots {
-        let tint = Color::WHITE.with_alpha(if slot.0 == weapon.active { 1.0 } else { 0.38 });
+        let id = if slot.0.is_knife() {
+            weapon.melee_weapon
+        } else {
+            slot.0
+        };
+        let tint = Color::WHITE.with_alpha(if id == weapon.active { 1.0 } else { 0.38 });
         if let Some(mut image) = image {
             image.color = tint;
+            image.image = art.weapon(id);
         }
         if let Some(mut color) = color {
             color.0 = tint;
