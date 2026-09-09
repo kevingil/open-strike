@@ -157,6 +157,132 @@ def channel(glb, clip, node, path, times, values):
     )
 
 
+def fit_existing_rifle(glb):
+    """Bind the game's rigid AK parts to the reference weapon/magazine joints."""
+    rifle = Glb(OUT / "ak_world.glb")
+    poses = first_pose(glb)
+    skin = glb.doc["skins"][0]
+    inverse_bind = matrix(
+        glb.values(skin["inverseBindMatrices"])[skin["joints"].index(92)]
+    )
+    reference = glb.doc["meshes"][1]["primitives"][0]
+    ref_positions = glb.values(reference["attributes"]["POSITION"])
+    ref_joints = glb.values(reference["attributes"]["JOINTS_0"])
+    target = [
+        inverse_bind @ Vector(v)
+        for v, joints in zip(ref_positions, ref_joints)
+        if skin["joints"][joints[0]] == 92
+    ]
+    body_nodes = [
+        n
+        for n in rifle.doc["nodes"]
+        if "mesh" in n and n["name"] not in {"Bolt", "Magazine"}
+    ]
+    source = [
+        Vector(v)
+        for n in body_nodes
+        for p in rifle.doc["meshes"][n["mesh"]]["primitives"]
+        for v in rifle.values(p["attributes"]["POSITION"])
+    ]
+    source_min = Vector([min(v[i] for v in source) for i in range(3)])
+    source_max = Vector([max(v[i] for v in source) for i in range(3)])
+    target_min = Vector([min(v[i] for v in target) for i in range(3)])
+    target_max = Vector([max(v[i] for v in target) for i in range(3)])
+    # Both inspected meshes use +Z down the barrel. One uniform scale matches
+    # stock-to-muzzle length; align the receiver's top and lateral center.
+    scale = (target_max.z - target_min.z) / (source_max.z - source_min.z)
+    offset = Vector(
+        (
+            (target_min.x + target_max.x - scale * (source_min.x + source_max.x)) / 2,
+            target_max.y - scale * source_max.y,
+            target_min.z - scale * source_min.z,
+        )
+    )
+    fit = Matrix.Translation(offset) @ Matrix.Scale(scale, 4)
+
+    # Merge rigid-mesh resources, preserving original UVs/material textures.
+    glb.data.extend(b"\0" * (-len(glb.data) % 4))
+    byte_offset = len(glb.data)
+    glb.data.extend(rifle.data)
+    offsets = {
+        key: len(glb.doc.setdefault(key, []))
+        for key in (
+            "bufferViews",
+            "accessors",
+            "images",
+            "samplers",
+            "textures",
+            "materials",
+            "meshes",
+        )
+    }
+    for view in rifle.doc["bufferViews"]:
+        view = copy.deepcopy(view)
+        view["buffer"] = 0
+        view["byteOffset"] = view.get("byteOffset", 0) + byte_offset
+        glb.doc["bufferViews"].append(view)
+    for a in rifle.doc["accessors"]:
+        a = copy.deepcopy(a)
+        a["bufferView"] += offsets["bufferViews"]
+        glb.doc["accessors"].append(a)
+    for image in rifle.doc.get("images", []):
+        image = copy.deepcopy(image)
+        image["bufferView"] += offsets["bufferViews"]
+        glb.doc["images"].append(image)
+    glb.doc["samplers"].extend(copy.deepcopy(rifle.doc.get("samplers", [])))
+    for texture in rifle.doc.get("textures", []):
+        texture = copy.deepcopy(texture)
+        texture["source"] += offsets["images"]
+        if "sampler" in texture:
+            texture["sampler"] += offsets["samplers"]
+        glb.doc["textures"].append(texture)
+    for material in rifle.doc["materials"]:
+        material = copy.deepcopy(material)
+        for container in (material, material.get("pbrMetallicRoughness", {})):
+            for key, value in container.items():
+                if key.endswith("Texture"):
+                    value["index"] += offsets["textures"]
+        glb.doc["materials"].append(material)
+    for mesh in rifle.doc["meshes"]:
+        mesh = copy.deepcopy(mesh)
+        for p in mesh["primitives"]:
+            p["attributes"] = {
+                key: index + offsets["accessors"]
+                for key, index in p["attributes"].items()
+            }
+            p["indices"] += offsets["accessors"]
+            p["material"] += offsets["materials"]
+        glb.doc["meshes"].append(mesh)
+
+    nodes = glb.doc["nodes"]
+    nodes[18].pop("mesh")
+    nodes[18].pop("skin")
+    for original in rifle.doc["nodes"]:
+        if "mesh" not in original:
+            continue
+        parents = (
+            [93]
+            if original["name"] == "Bolt"
+            else [97, 99]
+            if original["name"] == "Magazine"
+            else [92]
+        )
+        # Both magazines share the fitted seated-magazine bind transform. The
+        # spare retains the source's independent travel and hand contact.
+        bind = poses[parents[0]].inverted() @ poses[92] @ fit
+        for parent in parents:
+            node = {
+                "name": "AK47_" + original["name"] + ("_spare" if parent == 99 else ""),
+                "mesh": original["mesh"] + offsets["meshes"],
+                "matrix": [v for row in bind.transposed() for v in row],
+            }
+            nodes[parent].setdefault("children", []).append(len(nodes))
+            nodes.append(node)
+    muzzle = fit @ Vector((0, 0.065, 0.52))
+    nodes[92].setdefault("children", []).append(len(nodes))
+    nodes.append({"name": "Muzzle", "translation": list(muzzle)})
+
+
 def make_clips(glb, root):
     source = glb.doc["animations"][0]
     reload = copy.deepcopy(source)
@@ -187,17 +313,19 @@ def make_clips(glb, root):
     glb.doc["animations"] = [*clips, reload]
 
 
-def export_variants():
+def export_variants(use_existing_rifle=False):
     glb = Glb(SOURCE)
     repair_arm_bind_space(glb)
     nodes = glb.doc["nodes"]
+    if use_existing_rifle:
+        fit_existing_rifle(glb)
+    else:
+        nodes[92].setdefault("children", []).append(len(nodes))
+        nodes.append({"name": "Muzzle", "translation": [0, 0.075, 0.812]})
     nodes[92]["name"] = "WeaponGrip"
     nodes[93]["name"] = "Bolt"
     nodes[97]["name"] = "Magazine"
     nodes[99]["name"] = "MagazineSpare"
-    muzzle = len(nodes)
-    nodes.append({"name": "Muzzle", "translation": [0, 0.075, 0.812]})
-    nodes[92].setdefault("children", []).append(muzzle)
     # Exclude the supplied transparent background plane, retaining the full rig.
     nodes[10]["children"] = []
     root = len(nodes)
@@ -216,4 +344,4 @@ def export_variants():
 
 
 if __name__ == "__main__":
-    export_variants()
+    export_variants(use_existing_rifle="--existing-rifle" in sys.argv)
