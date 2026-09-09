@@ -104,18 +104,28 @@ impl Default for PlayerSettings {
 pub enum WeaponId {
     AK47,
     DefaultKnife,
+    ReferenceKnife,
 }
 
 impl WeaponId {
+    pub fn is_knife(self) -> bool {
+        matches!(self, Self::DefaultKnife | Self::ReferenceKnife)
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             WeaponId::AK47 => "AK-47",
             WeaponId::DefaultKnife => "Default Knife",
+            WeaponId::ReferenceKnife => "Reference Knife",
         }
     }
 
     pub fn all() -> Vec<WeaponId> {
-        vec![WeaponId::AK47, WeaponId::DefaultKnife]
+        vec![
+            WeaponId::AK47,
+            WeaponId::DefaultKnife,
+            WeaponId::ReferenceKnife,
+        ]
     }
 }
 
