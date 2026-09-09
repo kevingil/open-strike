@@ -8,6 +8,7 @@ pub struct GameConfig {
     pub mode: GameMode,
     pub map: MapId,
     pub match_settings: MatchSettings,
+    pub bot_difficulty: BotDifficulty,
 }
 
 impl Default for GameConfig {
@@ -16,8 +17,18 @@ impl Default for GameConfig {
             mode: GameMode::default(),
             map: MapId::default(),
             match_settings: MatchSettings::default(),
+            bot_difficulty: BotDifficulty::default(),
         }
     }
+}
+
+/// Shared by all bots; a future settings selector can update this configuration.
+#[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BotDifficulty {
+    Easy,
+    #[default]
+    Normal,
+    Hard,
 }
 
 /// Available game modes
