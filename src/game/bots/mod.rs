@@ -1,5 +1,6 @@
 //! Local AI and future remote inputs share controller and weapon intent contracts.
 use crate::game::{
+    config::GameConfig,
     game::SimulationSet,
     matchplay::{ActorIntent, Combatant},
     weapons::WeaponState,
@@ -8,12 +9,15 @@ use crate::game::{
 use bevy::prelude::*;
 use bevy_fps_controller::controller::FpsControllerInput;
 use bevy_rapier3d::prelude::*;
+mod difficulty;
 pub mod navigation;
+use difficulty::AimState;
 use navigation::Navigation;
 #[derive(Component)]
 pub struct BotController {
     pub slot: usize,
     reaction: f32,
+    aim: AimState,
     pub target: Option<Entity>,
     pub path: Vec<usize>,
     pub waypoint: usize,
@@ -25,6 +29,7 @@ impl BotController {
         Self {
             slot,
             reaction: 0.0,
+            aim: AimState::default(),
             target: None,
             path: Vec::new(),
             waypoint: 0,
@@ -50,6 +55,7 @@ impl Plugin for BotPlugin {
 }
 fn think(
     time: Res<Time>,
+    config: Res<GameConfig>,
     nav: Res<Navigation>,
     context: ReadRapierContext,
     actors: Query<(Entity, &Transform, &Combatant)>,
@@ -69,6 +75,7 @@ fn think(
     let Ok(physics) = context.single() else {
         return;
     };
+    let profile = config.bot_difficulty.profile();
     for (entity, transform, actor, mut bot, mut input, mut intent, weapon) in &mut bots {
         intent.fire = false;
         input.movement = Vec3::ZERO;
@@ -106,18 +113,33 @@ fn think(
             .min_by(|a, b| a.2.total_cmp(&b.2));
         if let Some((target, point, _)) = target {
             if bot.target != Some(target) {
-                bot.reaction = 0.35 + bot.slot as f32 * 0.025;
+                bot.reaction = profile.reaction_seconds + bot.slot as f32 * 0.025;
+                bot.aim.reset(&profile);
                 bot.target = Some(target);
             }
             bot.reaction -= time.delta_secs();
             let aim = (point - eye).normalize_or_zero();
-            let desired = (-aim.x).atan2(-aim.z);
+            let offset = bot.aim.offset(time.delta_secs(), &profile);
+            let desired = (-aim.x).atan2(-aim.z) + offset.x;
             let error = (desired - input.yaw + std::f32::consts::PI)
                 .rem_euclid(std::f32::consts::TAU)
                 - std::f32::consts::PI;
-            input.yaw += error.clamp(-3.0 * time.delta_secs(), 3.0 * time.delta_secs());
-            input.pitch = aim.y.asin();
-            intent.fire = bot.reaction <= 0.0 && error.abs() < 0.06;
+            let max_turn = profile.yaw_speed * time.delta_secs();
+            input.yaw += error.clamp(-max_turn, max_turn);
+            let desired_pitch = (aim.y.asin() + offset.y)
+                .clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
+            let pitch_error = desired_pitch - input.pitch;
+            let pitch_ready = if let Some(speed) = profile.pitch_speed {
+                let max_turn = speed * time.delta_secs();
+                input.pitch += pitch_error.clamp(-max_turn, max_turn);
+                pitch_error.abs() < 0.06
+            } else {
+                input.pitch = desired_pitch;
+                true
+            };
+            // Align with the bot's imperfect aim, not the exact enemy position.
+            let ready = bot.reaction <= 0.0 && error.abs() < 0.06 && pitch_ready;
+            intent.fire = bot.aim.fire(ready, time.delta_secs(), &profile);
             intent.reload = weapon.magazine == 0;
             if weapon.muzzle_blocked {
                 input.movement.x = if bot.slot % 2 == 0 { 0.07 } else { -0.07 };
