@@ -190,12 +190,15 @@ reload through normal weapon intents. This is opt-in rendering diagnostics.
 
 ### Dedicated first-person arms
 
-Soldier and Police now use separate first-person sleeve/glove variants derived
-from the supplied DJMaesen arm model, selected by the equipped `SkinId` for both
-AK and knife. The full-body character mesh is not rendered as first-person arms.
-The existing AK fire, magazine, charging-handle and reload wrist motion is
-retained. First-person elbow placement is authored separately; world characters
-and weapon attachments keep their existing assets.
+AK first-person views use the supplied **AKM reload animation** model by Vlasov
+Daniil: its rifle, gloves, sleeve mesh, twist joints and original reload channels.
+Knife views use the separate DJMaesen reference. Both select a tint from `SkinId`;
+world characters and their AK attachments retain the existing assets.
+
+The AK camera transform and 55-degree vertical FOV stay fixed throughout reload.
+The source's 4.35-second motion is retimed to the existing 2.5-second gameplay
+reload. Idle holds the source entry pose; fire adds a short whole-rig recoil.
+Local magazine sounds follow the reference; world reload sounds remain unchanged.
 
 Rebuild these variants **after** the base AK/knife exporters:
 
@@ -203,7 +206,12 @@ Rebuild these variants **after** the base AK/knife exporters:
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/export_viewmodels.py
 ```
 
-The AK variants retain the fitted reference arm geometry and authored rifle actions.
+`tools/export_rifle_view.py` converts the AKM GLB directly, preserving its weights,
+inverse bind matrices and animation samples. It repairs the supplied arms' baked
+whole-mesh scale without stretching individual hand/finger segments. To rebuild
+only AK views, run it with Blender as above. Its optional `-- --existing-rifle`
+argument fits the older AK mesh and two magazine copies to the reference rig;
+the default retains the complete reference model to match its proportions.
 Knife variants preserve the supplied model's native skeleton, skin weights, wrist
 poses and animated knife attachment. `tools/export_reference_knife.py` exports
 both knife choices for Soldier and Police, plus the reference blade's world model
