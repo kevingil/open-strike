@@ -203,7 +203,11 @@ fn update_match(
             controller.ground_tick = 0;
             input.yaw = spawn.rotation.to_radians();
             input.pitch = 0.0;
-            *weapon = WeaponState::default();
+            *weapon = WeaponState {
+                melee_weapon: weapon.melee_weapon,
+                previous: weapon.melee_weapon,
+                ..default()
+            };
             actor.health = 100.0;
             actor.armor = 100.0;
             actor.protection_remaining = 2.0;

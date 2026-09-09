@@ -1,7 +1,5 @@
 use super::{player_model::PlayerModel, skins::SkinId};
-use crate::game::{
-    assets::GameAssets, config::WeaponId, matchplay::Combatant, weapons::WeaponState,
-};
+use crate::game::{assets::GameAssets, matchplay::Combatant, weapons::WeaponState};
 use bevy::prelude::*;
 use bevy_fps_controller::controller::{FpsController, FpsControllerInput};
 use bevy_rapier3d::prelude::Velocity;
@@ -232,7 +230,7 @@ pub fn detect_animation_state(
             continue;
         };
         let speed = velocity.linvel.xz().length();
-        animation.action = if weapon.active == WeaponId::DefaultKnife {
+        animation.action = if weapon.active.is_knife() {
             weapon.slashes
         } else {
             weapon.shots
@@ -260,7 +258,7 @@ pub fn detect_animation_state(
         };
         animation.state = if !actor.alive() {
             11
-        } else if weapon.active == WeaponId::DefaultKnife {
+        } else if weapon.active.is_knife() {
             if weapon.equip_remaining > 0.0 {
                 14
             } else if weapon.knife_remaining > 0.0 {

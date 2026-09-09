@@ -147,7 +147,11 @@ fn init_player(
                     spawn.rotation.to_radians(),
                 ),
                 ActorIntent::default(),
-                crate::game::weapons::WeaponState::default(),
+                crate::game::weapons::WeaponState {
+                    melee_weapon: loadout.melee_weapon,
+                    previous: loadout.melee_weapon,
+                    ..default()
+                },
                 crate::game::weapons::audio::AudioState::default(),
                 FpsControllerInput {
                     yaw: spawn.rotation.to_radians(),
