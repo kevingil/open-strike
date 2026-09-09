@@ -145,6 +145,10 @@ fn setup(mut commands: Commands, server: Res<AssetServer>, skins: Res<SkinRegist
                                 WeaponId::AK47 => {
                                     ("generated/ui/inventory/ak47.png", "Rifle · Default finish")
                                 }
+                                WeaponId::ReferenceKnife => (
+                                    "generated/ui/inventory/reference_knife.png",
+                                    "Melee · Reference finish",
+                                ),
                                 WeaponId::DefaultKnife => {
                                     ("generated/ui/inventory/knife.png", "Melee · Default finish")
                                 }
