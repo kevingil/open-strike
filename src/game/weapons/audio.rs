@@ -167,7 +167,7 @@ fn sounds(
         if actor.alive() && (!state.alive || state.equips != weapon.equips) {
             play(
                 &mut commands,
-                if weapon.active == WeaponId::DefaultKnife {
+                if weapon.active.is_knife() {
                     cues.knife_draw.clone()
                 } else {
                     cues.draw.clone()
