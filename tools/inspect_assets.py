@@ -131,15 +131,18 @@ def main():
         "knife_view",
         "knife_view_soldier",
         "knife_view_police",
+        "reference_knife_view_soldier",
+        "reference_knife_view_police",
         "knife_pose_attacker",
         "knife_pose_defender",
     ):
         validate(
             ROOT / f"assets/generated/{name}.glb",
             {"idle_knife", "draw_knife", "slash_knife"},
-            {"KnifeGrip"} if name.startswith("knife_view") else {"mixamorig:RightHand"},
+            {"KnifeGrip"} if "knife_view" in name else {"mixamorig:RightHand"},
         )
     validate(ROOT / "assets/generated/knife_world.glb", set(), {"KnifeGrip"})
+    validate(ROOT / "assets/generated/reference_knife_world.glb", set(), {"KnifeGrip"})
     document, _ = read_glb(ROOT / "assets/generated/dust2.glb")
     assert len(document["materials"]) == 11
     assert all(
