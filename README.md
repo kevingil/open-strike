@@ -1,10 +1,7 @@
 # Open Strike
 
-An open-source tactical FPS inspired by Counter-Strike, with a focus on **5v5 team play**, **deathmatch**, and **crowdsourced CS:GO maps**.
+An open-source tactical FPS inspired by Counter-Strike
 
-Pick your side, build your loadout, and fight across familiar battlegrounds. Open Strike brings together competitive team play, fast respawns, and a community-driven vision for its map collection.
-
-The game is an early prototype. Today, you can play offline 3v3 team deathmatch with bots on Dust 2. Online 5v5 and a broader collection of community-contributed maps are the direction of the project.
 
 ## A look at the game
 
