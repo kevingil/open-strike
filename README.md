@@ -36,7 +36,7 @@ Start on Dust 2, with crowdsourced CS:GO maps at the heart of the game's vision.
 
 Jump into team deathmatch: fight alongside your squad, rack up kills, and get back into the action after each respawn.
 
-![First-person team deathmatch on Dust 2 in Open Strike](docs/screenshots/gameplay.png)
+![First-person team deathmatch on Dust 2 in Open Strike](docs/screenshots/gameplay-dust2.png)
 
 ## Run and contribute
 

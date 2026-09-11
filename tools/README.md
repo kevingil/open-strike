@@ -152,7 +152,7 @@ cp /private/tmp/csrs-menu-home.png docs/screenshots/menu.png
 cp /private/tmp/csrs-menu-inventory.png docs/screenshots/inventory.png
 cp /private/tmp/csrs-menu-loadout.png docs/screenshots/loadout.png
 cp /private/tmp/csrs-menu-play.png docs/screenshots/maps.png
-cp /private/tmp/csrs-menu-hud.png docs/screenshots/gameplay.png
+cp /private/tmp/csrs-menu-hud.png docs/screenshots/gameplay-dust2.png
 ```
 
 For an individual screen, set `CSRS_CAPTURE` to its output PNG path and optionally
