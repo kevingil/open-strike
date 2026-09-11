@@ -6,6 +6,7 @@ use crate::game::{
     player::{player::PlayerEntity, player_model::PlayerModel, skins::SkinId},
 };
 use bevy::{
+    core_pipeline::tonemapping::Tonemapping,
     prelude::*,
     render::{
         camera::{ClearColorConfig, Exposure},
@@ -130,7 +131,7 @@ pub fn spawn(
     assets: &GameAssets,
     gltfs: &Assets<Gltf>,
     actor: Entity,
-    _world_camera: Entity,
+    world_camera: Entity,
     skin: SkinId,
 ) {
     let skin_index = match skin {
@@ -186,7 +187,10 @@ pub fn spawn(
     commands
         .spawn((
             PlayerEntity,
-            ViewModelCamera(actor),
+            ViewModelCamera {
+                actor,
+                world_camera,
+            },
             Camera3d::default(),
             Camera {
                 order: 1,
@@ -200,7 +204,7 @@ pub fn spawn(
                 far: 10.0,
                 ..default()
             }),
-            Exposure { ev100: 12.0 },
+            Exposure::default(),
             AmbientLight::default(),
             RenderPlayer {
                 logical_entity: actor,
@@ -476,7 +480,10 @@ pub fn animate_viewmodel(
 }
 
 #[derive(Component)]
-pub struct ViewModelCamera(Entity);
+pub struct ViewModelCamera {
+    actor: Entity,
+    world_camera: Entity,
+}
 
 #[derive(Component)]
 pub struct ViewModelLight(Entity);
@@ -484,7 +491,14 @@ pub struct ViewModelLight(Entity);
 pub fn frame_camera(
     weapons: Query<&WeaponState>,
     ambient: Res<AmbientLight>,
-    mut cameras: Query<(&ViewModelCamera, &mut Projection, &mut AmbientLight)>,
+    world_cameras: Query<(&Exposure, &Tonemapping), Without<ViewModelCamera>>,
+    mut cameras: Query<(
+        &ViewModelCamera,
+        &mut Projection,
+        &mut AmbientLight,
+        &mut Exposure,
+        &mut Tonemapping,
+    )>,
     mut lights: Query<(&ViewModelLight, &mut PointLight)>,
 ) {
     for (owner, mut light) in &mut lights {
@@ -503,18 +517,16 @@ pub fn frame_camera(
             };
         }
     }
-    for (camera, mut projection, mut lighting) in &mut cameras {
-        if let (Ok(weapon), Projection::Perspective(p)) = (weapons.get(camera.0), &mut *projection)
+    for (camera, mut projection, mut lighting, mut exposure, mut tonemapping) in &mut cameras {
+        // Composite the arms with the same exposure and color response as the world.
+        if let Ok((world_exposure, world_tonemapping)) = world_cameras.get(camera.world_camera) {
+            *exposure = *world_exposure;
+            *tonemapping = *world_tonemapping;
+        }
+        *lighting = ambient.clone();
+        if let (Ok(weapon), Projection::Perspective(p)) =
+            (weapons.get(camera.actor), &mut *projection)
         {
-            *lighting = if weapon.active == WeaponId::AK47 {
-                AmbientLight {
-                    color: Color::WHITE,
-                    brightness: 4000.0,
-                    ..default()
-                }
-            } else {
-                ambient.clone()
-            };
             p.fov = if weapon.active.is_knife() {
                 // Keep both hands framed on narrower windows as well as 16:9.
                 let vertical = 55_f32.to_radians();
