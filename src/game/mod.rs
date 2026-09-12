@@ -21,5 +21,6 @@ pub mod assets;
 
 pub mod debug;
 pub mod hub;
+pub mod local;
 pub mod net;
 pub mod sound_library;

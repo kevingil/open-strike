@@ -38,7 +38,7 @@ impl LocalMatchOption {
         config.map = MapId::Dust2;
     }
     pub fn selected(config: &GameConfig) -> bool {
-        config.mode == GameMode::TeamDeathmatch && config.map == MapId::Dust2
+        config.mode == GameMode::TeamDeathmatch && MapId::PLAYABLE.contains(&config.map)
     }
 }
 #[derive(Component)]

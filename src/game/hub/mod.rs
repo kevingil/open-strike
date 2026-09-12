@@ -3,6 +3,7 @@
 pub mod scenario;
 use crate::game::{
     config::{GameConfig, GameMode, MapId},
+    local::{LocalDb, KEY_HUB},
     net::{client::ClientNet, NetRole},
     GameState,
 };
@@ -180,17 +181,6 @@ struct StoredConfig {
     username: Option<String>,
 }
 
-fn config_path() -> std::path::PathBuf {
-    if let Some(path) = std::env::var_os("STRIKE_HUB_CONFIG") {
-        return path.into();
-    }
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
-        .unwrap_or_else(|| ".".into());
-    base.join("open-strike").join("hub.json")
-}
-
 #[derive(Resource)]
 pub struct HubClient {
     pub url: String,
@@ -200,10 +190,11 @@ pub struct HubClient {
     rx: Mutex<Receiver<HubEvent>>,
     device_label: String,
     pub in_flight: usize,
+    db: LocalDb,
 }
 
 impl HubClient {
-    fn new(url: String, session: Option<String>, username: Option<String>) -> Self {
+    fn new(url: String, session: Option<String>, username: Option<String>, db: LocalDb) -> Self {
         let (tx, rx) = channel();
         let host = std::env::var("HOSTNAME").unwrap_or_else(|_| "desktop".into());
         Self {
@@ -214,6 +205,7 @@ impl HubClient {
             rx: Mutex::new(rx),
             device_label: format!("{host} ({})", std::env::consts::OS),
             in_flight: 0,
+            db,
         }
     }
 
@@ -222,16 +214,14 @@ impl HubClient {
     }
 
     fn persist(&self) {
-        let path = config_path();
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
         let stored = StoredConfig {
             url: self.url.clone(),
             session: self.session.clone(),
             username: self.username.clone(),
         };
-        let _ = std::fs::write(path, serde_json::to_string_pretty(&stored).unwrap());
+        if let Ok(text) = serde_json::to_string(&stored) {
+            self.db.set(KEY_HUB, &text);
+        }
     }
 
     pub fn request(&mut self, request: HubRequest, method: &'static str, path: String, body: Option<Value>) {
@@ -358,9 +348,9 @@ impl Plugin for HubPlugin {
     }
 }
 
-fn setup(mut commands: Commands, mut session: ResMut<HubSession>) {
-    let stored: Option<StoredConfig> = std::fs::read_to_string(config_path())
-        .ok()
+fn setup(mut commands: Commands, mut session: ResMut<HubSession>, db: Res<LocalDb>) {
+    let stored: Option<StoredConfig> = db
+        .get(KEY_HUB)
         .and_then(|text| serde_json::from_str(&text).ok());
     let url = std::env::var("STRIKE_HUB_URL")
         .ok()
@@ -375,7 +365,7 @@ fn setup(mut commands: Commands, mut session: ResMut<HubSession>) {
         .filter(|s| s.url.trim_end_matches('/') == url)
         .map(|s| (s.session, s.username))
         .unwrap_or((None, None));
-    let mut client = HubClient::new(url, token.clone(), username);
+    let mut client = HubClient::new(url, token.clone(), username, db.clone());
     if token.is_some() {
         *session = HubSession::Connecting;
         client.me();

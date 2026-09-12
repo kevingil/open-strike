@@ -225,9 +225,13 @@ fn configure(
     mut config: ResMut<crate::game::config::GameConfig>,
     mut loadout: ResMut<crate::game::config::PlayerLoadout>,
 ) {
-    if std::env::var("CSRS_MAP").is_ok_and(|s| s == "warehouse") {
-        config.map = crate::game::config::MapId::Warehouse;
-        config.mode = crate::game::config::GameMode::Freemode;
+    if let Ok(map) = std::env::var("CSRS_MAP") {
+        if let Some(map) = crate::game::config::MapId::from_key(&map) {
+            config.map = map;
+            if map == crate::game::config::MapId::Warehouse {
+                config.mode = crate::game::config::GameMode::Freemode;
+            }
+        }
     }
     if let Ok(seconds) = std::env::var("CSRS_MATCH_SECONDS") {
         config.match_settings.time_limit = seconds

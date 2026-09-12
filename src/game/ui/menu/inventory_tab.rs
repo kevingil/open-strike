@@ -141,24 +141,12 @@ fn setup(mut commands: Commands, server: Res<AssetServer>, skins: Res<SkinRegist
                     })
                     .with_children(|grid| {
                         let weapons = WeaponId::all().into_iter().map(|weapon| {
-                            let (preview, subtitle) = match weapon {
-                                WeaponId::AK47 => {
-                                    ("generated/ui/inventory/ak47.png", "Rifle · Default finish")
-                                }
-                                WeaponId::ReferenceKnife => (
-                                    "generated/ui/inventory/reference_knife.png",
-                                    "Melee · Reference finish",
-                                ),
-                                WeaponId::DefaultKnife => {
-                                    ("generated/ui/inventory/knife.png", "Melee · Default finish")
-                                }
-                            };
                             (
                                 Item::Weapon(weapon),
                                 Category::Weapons,
                                 weapon.name(),
-                                subtitle,
-                                preview,
+                                weapon.subtitle(),
+                                weapon.inventory_path(),
                             )
                         });
                         let characters = skins.skins.iter().map(|skin| {

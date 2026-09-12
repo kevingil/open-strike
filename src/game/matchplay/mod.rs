@@ -3,8 +3,8 @@ use crate::game::{
     config::{GameConfig, GameMode, WeaponId},
     game::SimulationSet,
     level::level::LoadedGameplayMapConfig,
-    player::player::BODY_HEIGHT,
     net::NetRole,
+    player::player::BODY_HEIGHT,
     weapons::WeaponState,
     GameState,
 };
@@ -230,11 +230,7 @@ pub fn update_match(
             controller.ground_tick = 0;
             input.yaw = spawn.rotation.to_radians();
             input.pitch = 0.0;
-            *weapon = WeaponState {
-                melee_weapon: weapon.melee_weapon,
-                previous: weapon.melee_weapon,
-                ..default()
-            };
+            *weapon = WeaponState::armed(weapon.gun, weapon.melee_weapon);
             actor.health = 100.0;
             actor.armor = 100.0;
             actor.protection_remaining = 2.0;

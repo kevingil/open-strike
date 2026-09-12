@@ -1,0 +1,14 @@
+{
+  "location": "A Site",
+  "source_anchor": [
+    -11.699999809265137,
+    -4.5,
+    55.5
+  ],
+  "source_faces": 1214590,
+  "vignette_faces": 191291,
+  "mesh_count": 2,
+  "background_bytes": 18977060,
+  "card_bytes": 311389,
+  "max_texture_dimension": 1024
+}

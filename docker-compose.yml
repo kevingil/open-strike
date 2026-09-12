@@ -1,0 +1,50 @@
+services:
+  hub:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: hub
+    ports:
+      - "7777:7777"
+    environment:
+      STRIKE_HUB_DB: /data/hub.db
+      STRIKE_HUB_LISTEN: 0.0.0.0:7777
+      STRIKE_HUB_NAME: Open Strike Hub
+      STRIKE_SERVER_KEY: ${STRIKE_SERVER_KEY:-dev}
+    volumes:
+      - hub-data:/data
+    restart: unless-stopped
+    init: true
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: server
+    ports:
+      - "27015:27015/udp"
+    environment:
+      STRIKE_SERVER_KEY: ${STRIKE_SERVER_KEY:-dev}
+      XDG_RUNTIME_DIR: /tmp
+    command:
+      - ./strike-server
+      - --hub
+      - http://hub:7777
+      - --port
+      - "27015"
+      - --advertise
+      - "127.0.0.1"
+      - --mode
+      - tdm
+      - --map
+      - dust2
+      - --bots
+      - "6"
+    depends_on:
+      hub:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+
+volumes:
+  hub-data:

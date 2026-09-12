@@ -57,7 +57,7 @@ pub fn update(
         let id = if slot.0.is_knife() {
             weapon.melee_weapon
         } else {
-            slot.0
+            weapon.gun
         };
         let tint = Color::WHITE.with_alpha(if id == weapon.active { 1.0 } else { 0.38 });
         if let Some(mut image) = image {
@@ -74,10 +74,10 @@ pub fn update(
         }
     }
     for mut visible in &mut ammo {
-        *visible = if weapon.active == WeaponId::AK47 {
-            Visibility::Inherited
-        } else {
+        *visible = if weapon.active.is_knife() {
             Visibility::Hidden
+        } else {
+            Visibility::Inherited
         };
     }
 }

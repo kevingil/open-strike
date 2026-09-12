@@ -3877,6 +3877,7 @@ dependencies = [
  "bevy_rapier3d",
  "bincode",
  "rand",
+ "rusqlite",
  "serde",
  "serde_json",
  "ureq",

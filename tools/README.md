@@ -7,8 +7,14 @@ Run all commands below from the repository root. Generated art and default audio
 ## Run the game
 
 ```sh
+# Regular (generated audio; local catalog loads automatically if present)
 cargo run --locked --bin open-strike
+
+# Load local audio files
+OPEN_STRIKE_AUDIO_PACK=assets/audio/local/catalog.ron cargo run --locked --bin open-strike
 ```
+
+Use `OPEN_STRIKE_AUDIO_PACK=assets/audio/csgo/catalog.ron` for the private CS:GO pack.
 
 ## Build
 
@@ -23,6 +29,7 @@ Run from the repository so `assets/` resolves. Generated GLBs are included; Blen
 ## Ownership and extension points
 
 - `src/game/config.rs` owns settings, supported loadouts, map choice and match defaults; menus edit these resources.
+- `src/game/local.rs` owns the client SQLite store (`~/.config/open-strike/local.db`): hub session, settings, and loadout.
 - `src/game/level/level.rs` owns map loading, required asset validation, collision readiness and recoverable loading errors. Pause preserves the session. Menu/restart removes session entities.
 - `src/game/player/input.rs` and `src/game/bots/` produce per-actor controller/weapon intents. Movement, Rapier, combat and match rules run in an explicit 60 Hz order.
 - `src/game/matchplay/` owns health, armor, teams, deaths, score, spawn protection and respawn. `src/game/weapons/` owns accepted shots, cadence, ammo, reload, hit queries and presentation events.
@@ -39,11 +46,13 @@ Original models and animation sources are preserved. Do not use the old scene-mu
 ```sh
 blender --background --factory-startup --python tools/export_assets.py -- characters
 blender --background --factory-startup --python tools/export_assets.py -- weapon
+python3 tools/download_catalog.py
+blender --background --factory-startup --python-exit-code 1 --python tools/export_catalog.py
 python3 tools/export_map.py
 python3 tools/inspect_assets.py
 ```
 
-On macOS, replace `blender` with `/Applications/Blender.app/Contents/MacOS/Blender` if it is not on PATH. Export characters before weapons. Outputs go to `assets/generated/`; required character action bindings are recorded in `assets/config/character_clips.json`.
+On macOS, replace `blender` with `/Applications/Blender.app/Contents/MacOS/Blender` if it is not on PATH. Export characters before weapons. Catalog download needs `SKETCHFAB_TOKEN` or `SKETCHFAB_API_TOKEN`; failed downloads return a nonzero exit status. The catalog exporter checks all requested sources before exporting and refuses to generate placeholder meshes. Supply `-- <weapon keys>` to export a subset; `-- knife_stained knife_forest` rebuilds the locally authored finishes without downloads. Outputs go to `assets/generated/`; required character action bindings are recorded in `assets/config/character_clips.json`.
 
 The exporter bakes the donor's evaluated motion onto each target's own rest skeleton, authors grounded crouch/death variants, aligns the support hand, limits character textures to 2K, and exports separate world/first-person AK scenes. Weapon sockets are `WeaponGrip`, `Muzzle`, `Magazine` and `Bolt`; first-person sleeves retain their length and the rifle retains its stock. First-person reload uses weapon-space magazine insertion from below, a charging-handle pull, and a recovery pose matching idle. Body materials use a declared cloth/skin/painted-armor surface policy instead of the imported metallic response. Inspection checks scene/clip/socket/material contracts, skin joint counts and finite geometry/animation values. Blender-only imports are explicitly marked for static checking; actual export execution validates those APIs.
 
@@ -51,13 +60,33 @@ World convention: meters, +Y up, camera forward -Z. Imported characters face +Z 
 
 The menu has its own showcase scale and framing. Those display transforms are deliberately separate from gameplay bodies.
 
+Catalog sources currently integrated: Glock-18, USP-S, P2000, Dual Berettas,
+P250, Tec-9, Five-SeveN, CZ75, Desert Eagle, R8, MAC-10, MP9, MP7, MP5-SD,
+and UMP-45. Their generated GLBs and inventory PNGs replace the initial
+placeholders. The remaining 20 downloaded-source catalog entries still need
+their source files and authored import profiles.
+
+The catalog exporter bakes evaluated meshes without rig helpers or inherited
+parent transforms, and uses explicit source orientations in `SOURCE_ROTATIONS`.
+P250 and MAC-10 use the assembled first animation frame; Dual Berettas use the
+complete `Group063` assembly, duplicated after normalization. MAC-10's suppressor
+is removed through its declared deform group. When adding a source, inspect its
+assembled pose and side view before declaring its orientation; the exporter
+rejects sources without a profile. Inventory previews use the weapon's side
+view, while world GLBs retain the +Y barrel / -Z up convention expected by the
+catalog viewmodel transform.
+
 ### Script guide
 
 | Script | Purpose |
 | --- | --- |
 | `tools/export_assets.py` | Export characters, world weapons, and menu animation clips. |
-| `tools/export_map.py` | Prepare the Dust 2 map's surface materials. |
-| `tools/export_menu.py` | Export the menu scene, map card, and rifle icon. |
+| `tools/export_map.py` | Prepare Dust 2 and Mirage surface materials. |
+| `tools/export_mirage.py` | Join, texture-cap, and export Mirage plus its A-site menu card. |
+| `tools/export_menu.py` | Export the Dust 2 menu scene, map card, and rifle icon. |
+| `tools/weapon_catalog.py` | Approved Sketchfab UIDs and source paths for the buy-menu catalog. |
+| `tools/download_catalog.py` | Download catalog sources into `assets/models/catalog/` (`SKETCHFAB_TOKEN` or `SKETCHFAB_API_TOKEN`). |
+| `tools/export_catalog.py` | Require catalog sources, apply silencer/scope/paint edits, and write world GLBs plus inventory icons; author the stained/forest knives locally. |
 | `tools/export_inventory.py` | Render weapon previews for the inventory. |
 | `tools/export_knife.py` | Generate the default knife, character clips, portraits, and HUD icons. |
 | `tools/export_viewmodels.py` | Rebuild first-person rifle and knife variants after the base exports. |
@@ -123,11 +152,48 @@ Online matches use three processes: `strike-hub` (accounts, friends, presence an
 server registry), `strike-server` (a headless match running the same simulation as the client)
 and the game client. Everything is configured from the client; there is no web dashboard.
 
+### Local hub
+
+Docker is the default local-dev path. The playable client stays on the host.
+
+```sh
+docker compose up --build
+STRIKE_HUB_URL=http://127.0.0.1:7777 cargo run --locked --bin open-strike
+```
+
+`docker compose restart` / `docker compose down` restart or stop the hub and match
+server. Promote an account with `docker compose exec hub ./strike-hub bootstrap-admin <username>`.
+Start only the hub with `docker compose up hub`.
+
+To run the same processes on the host:
+
+```sh
+# Optional: build the match server so the hub can spawn games
+cargo build --locked --bin strike-server
+
+# Hub: SQLite file on localhost
+STRIKE_HUB_DB=hub.db STRIKE_HUB_LISTEN=127.0.0.1:7777 STRIKE_SERVER_KEY=dev \
+STRIKE_SERVER_BIN=target/debug/strike-server STRIKE_SERVER_HOST=127.0.0.1 \
+cargo run --locked -p strike-hub
+
+# Client: point it at the local hub, then create an account or sign in from the sidebar
+STRIKE_HUB_URL=http://127.0.0.1:7777 cargo run --locked --bin open-strike
+```
+
+Skip `STRIKE_SERVER_BIN` if you only need accounts, friends, and presence. To promote an
+account after the first registrant:
+
+```sh
+STRIKE_HUB_DB=hub.db cargo run --locked -p strike-hub -- bootstrap-admin <username>
+```
+
+### LAN / public hub
+
 ```sh
 # Hub: SQLite file, plain HTTP, spawns a match server per game when STRIKE_SERVER_BIN is set.
 STRIKE_HUB_DB=hub.db STRIKE_HUB_LISTEN=0.0.0.0:7777 STRIKE_SERVER_KEY=change-me \
 STRIKE_SERVER_BIN=target/debug/strike-server STRIKE_SERVER_HOST=<public ip> \
-cargo run --locked --bin strike-hub
+cargo run --locked -p strike-hub
 
 # Client: point it at the hub, then sign in or create an account from the sidebar.
 STRIKE_HUB_URL=http://<hub ip>:7777 cargo run --locked --bin open-strike

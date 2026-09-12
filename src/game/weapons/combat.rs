@@ -1,6 +1,6 @@
-use super::{ShotFired, WeaponSelection, WeaponState, AK47, KNIFE};
+use super::{ShotFired, WeaponSelection, WeaponState, KNIFE};
 use crate::game::{
-    config::{GameConfig, WeaponId},
+    config::GameConfig,
     level::targets::{DeadTarget, Target},
     matchplay::{hostile, ActorIntent, Combatant, MatchSession},
     net::NetRole,
@@ -137,18 +137,19 @@ pub fn simulate_weapons(
             }
             continue;
         }
+        let stats = weapon.active.stats();
         if weapon.reload_remaining > 0.0 {
             weapon.reload_remaining = (weapon.reload_remaining - dt).max(0.0);
             if weapon.reload_remaining == 0.0 {
-                let count = (AK47.magazine - weapon.magazine).min(weapon.reserve);
+                let count = (stats.magazine - weapon.magazine).min(weapon.reserve);
                 weapon.magazine += count;
                 weapon.reserve -= count;
             }
             intent.reload = false;
             continue;
         }
-        if intent.reload && weapon.magazine < AK47.magazine && weapon.reserve > 0 {
-            weapon.reload_remaining = AK47.reload_seconds;
+        if intent.reload && weapon.magazine < stats.magazine && weapon.reserve > 0 {
+            weapon.reload_remaining = stats.reload_seconds;
             intent.reload = false;
             continue;
         }
@@ -158,13 +159,13 @@ pub fn simulate_weapons(
         }
         if weapon.magazine == 0 {
             if weapon.reserve > 0 {
-                weapon.reload_remaining = AK47.reload_seconds;
+                weapon.reload_remaining = stats.reload_seconds;
             }
-            weapon.cooldown = AK47.interval;
+            weapon.cooldown = stats.interval;
             continue;
         }
         weapon.magazine -= 1;
-        weapon.cooldown = AK47.interval;
+        weapon.cooldown = stats.interval;
         weapon.flash_remaining = 0.065;
         weapon.shots += 1;
         actor.protection_remaining = 0.0;
@@ -186,8 +187,8 @@ pub fn simulate_weapons(
         let filter = QueryFilter::default()
             .exclude_rigid_body(entity)
             .predicate(&predicate);
-        let aim_hit = physics.cast_ray(origin, direction, AK47.range, true, filter);
-        let aim = origin + direction * aim_hit.map(|(_, toi)| toi).unwrap_or(AK47.range);
+        let aim_hit = physics.cast_ray(origin, direction, stats.range, true, filter);
+        let aim = origin + direction * aim_hit.map(|(_, toi)| toi).unwrap_or(stats.range);
         let muzzle_dir = (aim - muzzle).normalize_or_zero();
         let obstructed = physics.cast_ray(
             muzzle,
@@ -223,8 +224,8 @@ pub fn simulate_weapons(
                         damage.push((
                             entity,
                             zone.player_entity,
-                            AK47.damage * zone.damage_multiplier(),
-                            WeaponId::AK47,
+                            stats.damage * zone.damage_multiplier(),
+                            weapon.active,
                             zone.zone_type == crate::game::player::skins::HitboxZoneType::Head,
                         ));
                     }
@@ -239,7 +240,7 @@ pub fn simulate_weapons(
             end,
         });
         if local.is_some() {
-            input.pitch = (input.pitch + AK47.recoil).min(1.52);
+            input.pitch = (input.pitch + stats.recoil).min(1.52);
         }
     }
     // Only the simulation authority awards damage; a client mirrors health from snapshots.

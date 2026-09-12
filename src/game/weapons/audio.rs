@@ -1,7 +1,7 @@
 //! Weapon and player cues consume accepted gameplay actions.
-use super::{ShotFired, WeaponState, AK47};
+use super::{ShotFired, WeaponState};
 use crate::game::{
-    config::{PlayerSettings, WeaponId},
+    config::PlayerSettings,
     matchplay::Combatant,
     player::player::{LocalPlayer, PlayerEntity},
     sound_library::SoundLibrary,
@@ -194,22 +194,22 @@ fn sounds(
         }
         if actor.alive()
             && !canceled
-            && weapon.active == WeaponId::AK47
+            && !weapon.active.is_knife()
             && (reloading || state.reload_remaining > 0.0)
         {
             let previous = if state.reload_remaining > 0.0 {
-                AK47.reload_seconds - state.reload_remaining
+                weapon.active.stats().reload_seconds - state.reload_remaining
             } else {
                 -1.0
             };
-            let elapsed = AK47.reload_seconds - weapon.reload_remaining;
+            let elapsed = weapon.active.stats().reload_seconds - weapon.reload_remaining;
             let reload_cues = if Some(entity) == local {
                 &cues.view_reload[..]
             } else {
                 &cues.reload[..]
             };
             for (fraction, clip) in reload_cues {
-                let at = fraction * AK47.reload_seconds;
+                let at = fraction * weapon.active.stats().reload_seconds;
                 if previous < at && elapsed >= at {
                     let sound = play(
                         &mut commands,

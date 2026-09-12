@@ -14,7 +14,9 @@ pub struct PlayTabPlugin;
 #[derive(Component)]
 pub(super) struct StartGameButton;
 #[derive(Component)]
-struct MapCard;
+struct MapCard(MapId);
+#[derive(Component)]
+struct MapSelectedBadge(MapId);
 #[derive(Component)]
 struct MatchDetails;
 #[derive(Resource, Default)]
@@ -34,7 +36,14 @@ impl Plugin for PlayTabPlugin {
             )
             .add_systems(
                 Update,
-                (interact, details, start_button::animate, online_buttons, online_status)
+                (
+                    interact,
+                    selected_cards,
+                    details,
+                    start_button::animate,
+                    online_buttons,
+                    online_status,
+                )
                     .run_if(in_state(GameState::MainMenu).and(in_state(MenuTab::Play))),
             );
     }
@@ -126,7 +135,6 @@ fn setup(
                     flex_direction: FlexDirection::Column,
                     row_gap: Val::Px(18.),
                     width: Val::Percent(100.),
-                    max_width: Val::Px(280.),
                     min_width: Val::Px(0.),
                     padding: UiRect::top(Val::Px(12.)),
                     ..default()
@@ -140,57 +148,9 @@ fn setup(
                         MUTED,
                     ));
                 });
-                row.spawn((
-                    MapCard,
-                    Button,
-                    Node {
-                        width: Val::VMin(30.),
-                        height: Val::VMin(49.),
-                        max_width: Val::Percent(100.),
-                        justify_self: JustifySelf::Center,
-                        border: UiRect::all(Val::Px(2.)),
-                        flex_direction: FlexDirection::Column,
-                        justify_content: JustifyContent::End,
-                        ..default()
-                    },
-                    BackgroundColor(PANEL),
-                    BorderColor(ACCENT),
-                ))
-                .with_children(|card| {
-                    card.spawn((
-                        ImageNode::new(server.load(menu_scene(&MapId::Dust2).thumbnail)),
-                        Node {
-                            position_type: PositionType::Absolute,
-                            width: Val::Percent(100.),
-                            height: Val::Percent(100.),
-                            ..default()
-                        },
-                    ));
-                    card.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            top: Val::Px(10.),
-                            right: Val::Px(10.),
-                            padding: UiRect::all(Val::Px(8.)),
-                            ..default()
-                        },
-                        BackgroundColor(SELECTED),
-                    ))
-                    .with_child(label("SELECTED", 11., WHITE));
-                    card.spawn((
-                        Node {
-                            padding: UiRect::all(Val::Px(18.)),
-                            flex_direction: FlexDirection::Column,
-                            row_gap: Val::Px(4.),
-                            ..default()
-                        },
-                        BackgroundColor(INK),
-                    ))
-                    .with_children(|name| {
-                        name.spawn(label("DUST 2", 28., WHITE));
-                        name.spawn(label("DEATHMATCH", 12., ACCENT));
-                    });
-                });
+                for map in MapId::PLAYABLE {
+                    map_card(row, &server, map);
+                }
             });
             root.spawn((
                 Node {
@@ -229,6 +189,72 @@ fn setup(
             });
         });
 }
+
+fn map_card(row: &mut ChildSpawnerCommands, server: &AssetServer, map: MapId) {
+    let scene = menu_scene(&map);
+    row.spawn((
+        MapCard(map),
+        Button,
+        Node {
+            width: Val::VMin(28.),
+            height: Val::VMin(49.),
+            max_width: Val::Percent(100.),
+            justify_self: JustifySelf::Center,
+            border: UiRect::all(Val::Px(2.)),
+            flex_direction: FlexDirection::Column,
+            justify_content: JustifyContent::End,
+            ..default()
+        },
+        BackgroundColor(PANEL),
+        BorderColor(if map == MapId::default() {
+            ACCENT
+        } else {
+            Color::NONE
+        }),
+    ))
+    .with_children(|card| {
+        card.spawn((
+            ImageNode::new(server.load(scene.thumbnail)),
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.),
+                height: Val::Percent(100.),
+                ..default()
+            },
+        ));
+        card.spawn((
+            MapSelectedBadge(map),
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(10.),
+                right: Val::Px(10.),
+                padding: UiRect::all(Val::Px(8.)),
+                display: if map == MapId::default() {
+                    Display::Flex
+                } else {
+                    Display::None
+                },
+                ..default()
+            },
+            BackgroundColor(SELECTED),
+        ))
+        .with_child(label("SELECTED", 11., WHITE));
+        card.spawn((
+            Node {
+                padding: UiRect::all(Val::Px(18.)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(4.),
+                ..default()
+            },
+            BackgroundColor(INK),
+        ))
+        .with_children(|name| {
+            name.spawn(label(map.name().to_uppercase(), 28., WHITE));
+            name.spawn(label("DEATHMATCH", 12., ACCENT));
+        });
+    });
+}
+
 fn details(config: Res<GameConfig>, mut labels: Query<&mut Text, With<MatchDetails>>) {
     if !config.is_changed() {
         return;
@@ -244,18 +270,24 @@ fn details(config: Res<GameConfig>, mut labels: Query<&mut Text, With<MatchDetai
         .map(|v| format!("First to {v} kills"))
         .unwrap_or("No score limit".into());
     for mut text in &mut labels {
-        **text = format!("Local bots · 3v3\n{time} · {score}");
+        **text = format!(
+            "Local bots · {} · 3v3\n{time} · {score}",
+            config.bot_difficulty.name()
+        );
     }
 }
 fn interact(
     mut config: ResMut<GameConfig>,
     mut pending: ResMut<StartPending>,
     mut next: ResMut<NextState<GameState>>,
-    cards: Query<&Interaction, (Changed<Interaction>, With<MapCard>)>,
+    cards: Query<(&Interaction, &MapCard), Changed<Interaction>>,
     buttons: Query<&Interaction, (Changed<Interaction>, With<StartGameButton>)>,
 ) {
-    if cards.iter().any(|i| *i == Interaction::Pressed) {
-        LocalMatchOption::select(&mut config);
+    for (interaction, card) in &cards {
+        if *interaction == Interaction::Pressed {
+            config.mode = GameMode::TeamDeathmatch;
+            config.map = card.0;
+        }
     }
     if !pending.0
         && LocalMatchOption::selected(&config)
@@ -263,6 +295,26 @@ fn interact(
     {
         pending.0 = true;
         next.set(GameState::Loading);
+    }
+}
+
+fn selected_cards(
+    config: Res<GameConfig>,
+    mut cards: Query<(&MapCard, &mut BorderColor)>,
+    mut badges: Query<(&MapSelectedBadge, &mut Node)>,
+) {
+    if !config.is_changed() {
+        return;
+    }
+    for (card, mut border) in &mut cards {
+        *border = BorderColor(if card.0 == config.map { ACCENT } else { Color::NONE });
+    }
+    for (badge, mut node) in &mut badges {
+        node.display = if badge.0 == config.map {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
 }
 

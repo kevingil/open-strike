@@ -3,6 +3,16 @@
 /tools/__pycache__/
 .ruff_cache
 
+# Local hub database
+/hub.db
+/hub.db-*
+crates/strike-hub/hub.db
+crates/strike-hub/hub.db-*
+
+# Client local store (auth session, settings, loadout)
+/local.db
+/local.db-*
+
 # Private planning files
 .plans/
 .cursor/
@@ -13,3 +23,7 @@
 *.zip
 *.7z
 *.rar
+# Full unprocessed Mirage source (~300MB). Export writes the playable GLB.
+/assets/maps/de_mirage/merged_model.glb
+# Downloaded Sketchfab catalog sources.
+/assets/models/catalog/

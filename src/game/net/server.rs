@@ -1,9 +1,6 @@
 //! Dedicated match server. Runs the core simulation headless, admits players with hub
 //! tickets, applies their reported inputs and broadcasts snapshots every tick.
-use super::{
-    proto::*,
-    NetRole,
-};
+use super::{proto::*, NetRole};
 use crate::game::{
     assets::GameAssets,
     bots::BotController,
@@ -49,7 +46,9 @@ impl ServerArgs {
                 .and_then(|i| args.get(i + 1))
                 .cloned()
         };
-        let port = value("--port").and_then(|v| v.parse().ok()).unwrap_or(27015);
+        let port = value("--port")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(27015);
         Self {
             hub: value("--hub"),
             server_id: value("--server-id").unwrap_or_else(|| format!("srv-{port}")),
@@ -66,8 +65,12 @@ impl ServerArgs {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(12),
             key: std::env::var("STRIKE_SERVER_KEY").unwrap_or_default(),
-            time_limit_secs: value("--time-limit").and_then(|v| v.parse().ok()).unwrap_or(600),
-            score_limit: value("--score-limit").and_then(|v| v.parse().ok()).unwrap_or(40),
+            time_limit_secs: value("--time-limit")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(600),
+            score_limit: value("--score-limit")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(40),
         }
     }
 }
@@ -227,7 +230,9 @@ fn spawn_bots(
     if !existing.is_empty() {
         return;
     }
-    let Some(map) = map.config.as_ref() else { return };
+    let Some(map) = map.config.as_ref() else {
+        return;
+    };
     for index in 0..args.bots {
         let slot = net.next_slot;
         net.next_slot += 1;
@@ -250,6 +255,7 @@ fn spawn_bots(
                 name: Some(crate::game::matchplay::BOT_NAMES[index % 12].to_string()),
                 placement: Some(placement),
                 melee_weapon: WeaponId::DefaultKnife,
+                primary_weapon: WeaponId::AK47,
                 skin: team_skin(team),
                 map,
                 cosmetic: false,
@@ -293,9 +299,12 @@ fn verify_ticket(args: &ServerArgs, ticket: &str) -> Result<(i64, String), Strin
         // Without a hub the ticket is the display name (LAN / development).
         return Ok((0, ticket.chars().take(20).collect()));
     };
-    let response = ureq::post(&format!("{hub}/v1/servers/{}/verify_ticket", args.server_id))
-        .send_json(serde_json::json!({ "key": args.key, "ticket": ticket }))
-        .map_err(|e| format!("ticket rejected: {e}"))?;
+    let response = ureq::post(&format!(
+        "{hub}/v1/servers/{}/verify_ticket",
+        args.server_id
+    ))
+    .send_json(serde_json::json!({ "key": args.key, "ticket": ticket }))
+    .map_err(|e| format!("ticket rejected: {e}"))?;
     let value: serde_json::Value = response.into_json().map_err(|e| e.to_string())?;
     let account = &value["account"];
     Ok((
@@ -319,7 +328,8 @@ fn receive_idle(net: Option<ResMut<ServerNet>>, time: Res<Time<bevy::time::Real>
             Err(_) => break,
         };
         let bytes = net.buffer[..len].to_vec();
-        if let Some(ClientMessage::Input(_) | ClientMessage::Ping) = decode::<ClientMessage>(&bytes) {
+        if let Some(ClientMessage::Input(_) | ClientMessage::Ping) = decode::<ClientMessage>(&bytes)
+        {
             if let Some(conn) = net.clients.get_mut(&addr) {
                 conn.last_seen = now;
             }
@@ -347,7 +357,11 @@ fn receive(
             continue;
         };
         match message {
-            ClientMessage::Join { version, ticket, name } => {
+            ClientMessage::Join {
+                version,
+                ticket,
+                name,
+            } => {
                 if version != PROTOCOL_VERSION {
                     net.send(
                         addr,
@@ -367,7 +381,12 @@ fn receive(
                 }
                 let humans = net.clients.len();
                 if humans >= args.max_players {
-                    net.send(addr, &ServerMessage::Rejected { reason: "match is full".into() });
+                    net.send(
+                        addr,
+                        &ServerMessage::Rejected {
+                            reason: "match is full".into(),
+                        },
+                    );
                     continue;
                 }
                 match verify_ticket(&args, &ticket) {
@@ -409,7 +428,8 @@ fn receive(
             ClientMessage::Input(input) => {
                 if let Some(conn) = net.clients.get_mut(&addr) {
                     conn.last_seen = now;
-                    if input.seq.wrapping_sub(conn.last_seq) < u32::MAX / 2 || conn.latest.is_none() {
+                    if input.seq.wrapping_sub(conn.last_seq) < u32::MAX / 2 || conn.latest.is_none()
+                    {
                         conn.last_seq = input.seq;
                         conn.latest = Some(input);
                     }
@@ -454,7 +474,11 @@ fn team_counts(actors: &Query<&mut Combatant>) -> [usize; 2] {
     counts
 }
 
-fn despawn_remote(commands: &mut Commands, conn: &ClientConn, models: &Query<(Entity, &PlayerModel)>) {
+fn despawn_remote(
+    commands: &mut Commands,
+    conn: &ClientConn,
+    models: &Query<(Entity, &PlayerModel)>,
+) {
     if let Some(entity) = conn.entity {
         for (model, link) in models.iter() {
             if link.logical_entity == entity {
@@ -475,7 +499,9 @@ fn spawn_pending_remotes(
     config: Res<GameConfig>,
     map: Res<LoadedGameplayMapConfig>,
 ) {
-    let Some(map) = map.config.as_ref() else { return };
+    let Some(map) = map.config.as_ref() else {
+        return;
+    };
     let pending: Vec<SocketAddr> = net
         .clients
         .iter()
@@ -483,7 +509,9 @@ fn spawn_pending_remotes(
         .map(|(a, _)| *a)
         .collect();
     for addr in pending {
-        let Some(conn) = net.clients.get_mut(&addr) else { continue };
+        let Some(conn) = net.clients.get_mut(&addr) else {
+            continue;
+        };
         let placement = placement_for(map, &config.mode, conn.team, conn.slot);
         if conn.entity.is_none() {
             let body = spawn_actor(
@@ -498,6 +526,7 @@ fn spawn_pending_remotes(
                     name: Some(conn.name.clone()),
                     placement: Some(placement),
                     melee_weapon: WeaponId::DefaultKnife,
+                    primary_weapon: WeaponId::AK47,
                     skin: team_skin(conn.team),
                     map,
                     cosmetic: false,
@@ -539,7 +568,11 @@ fn apply_remote_inputs(
     for (remote, actor, mut transform, mut velocity, mut input, mut controller, mut intent) in
         &mut remotes
     {
-        let Some(latest) = net.clients.get(&remote.addr).and_then(|c| c.latest.as_ref()) else {
+        let Some(latest) = net
+            .clients
+            .get(&remote.addr)
+            .and_then(|c| c.latest.as_ref())
+        else {
             continue;
         };
         if !actor.alive() {
@@ -562,7 +595,9 @@ fn apply_remote_inputs(
         if finite && latest.respawn_ack == actor.respawn_seq && latest.position.length() < 5000.0 {
             transform.translation = latest.position;
             velocity.linvel = latest.velocity.clamp_length_max(60.0);
-            controller.height = latest.height.clamp(controller.crouch_height, controller.upright_height);
+            controller.height = latest
+                .height
+                .clamp(controller.crouch_height, controller.upright_height);
         }
         let _ = &actor;
     }
@@ -682,7 +717,9 @@ fn heartbeat(
         .map(|c| c.account_id)
         .collect();
     let body = serde_json::json!({ "key": args.key, "phase": phase, "players": players });
-    if let Err(e) = ureq::post(&format!("{hub}/v1/servers/{}/heartbeat", args.server_id)).send_json(body) {
+    if let Err(e) =
+        ureq::post(&format!("{hub}/v1/servers/{}/heartbeat", args.server_id)).send_json(body)
+    {
         warn!("heartbeat failed: {e}");
     }
 }
@@ -723,7 +760,8 @@ fn finished(
                 })
                 .collect();
             let body = serde_json::json!({ "key": args.key, "results": results });
-            let _ = ureq::post(&format!("{hub}/v1/servers/{}/report", args.server_id)).send_json(body);
+            let _ =
+                ureq::post(&format!("{hub}/v1/servers/{}/report", args.server_id)).send_json(body);
         }
     }
     if now - started > 12.0 {
@@ -744,7 +782,9 @@ pub fn run() {
                 })
                 .disable::<WinitPlugin>()
                 .set(bevy::log::LogPlugin {
-                    filter: "wgpu=error,naga=warn,bevy_render=warn,bevy_audio=error,bevy_gltf=error".into(),
+                    filter:
+                        "wgpu=error,naga=warn,bevy_render=warn,bevy_audio=error,bevy_gltf=error"
+                            .into(),
                     ..default()
                 }),
         )

@@ -1,8 +1,8 @@
 use super::player::LocalPlayer;
 use crate::game::{
-    config::{PlayerSettings, WeaponId},
+    config::PlayerSettings,
     matchplay::{ActorIntent, Combatant},
-    weapons::WeaponSelection,
+    weapons::{WeaponSelection, WeaponState},
 };
 use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 use bevy_fps_controller::controller::FpsControllerInput;
@@ -13,10 +13,18 @@ pub fn human_input(
     mut motion: EventReader<MouseMotion>,
     settings: Res<PlayerSettings>,
     window: Query<&Window, With<PrimaryWindow>>,
-    mut query: Query<(&mut FpsControllerInput, &mut ActorIntent, &Combatant), With<LocalPlayer>>,
+    mut query: Query<
+        (
+            &mut FpsControllerInput,
+            &mut ActorIntent,
+            &Combatant,
+            &WeaponState,
+        ),
+        With<LocalPlayer>,
+    >,
 ) {
     let delta: Vec2 = motion.read().map(|e| e.delta).sum();
-    let Ok((mut input, mut intent, actor)) = query.single_mut() else {
+    let Ok((mut input, mut intent, actor, weapon)) = query.single_mut() else {
         return;
     };
     if !actor.alive() || !window.single().is_ok_and(|w| w.focused) {
@@ -43,9 +51,9 @@ pub fn human_input(
     intent.fire = mouse.pressed(MouseButton::Left);
     intent.reload |= keys.just_pressed(KeyCode::KeyR);
     if keys.just_pressed(KeyCode::Digit1) {
-        intent.selection = Some(WeaponSelection::Select(WeaponId::AK47));
+        intent.selection = Some(WeaponSelection::Select(weapon.gun));
     } else if keys.just_pressed(KeyCode::Digit3) {
-        intent.selection = Some(WeaponSelection::Select(WeaponId::DefaultKnife));
+        intent.selection = Some(WeaponSelection::Select(weapon.melee_weapon));
     } else if keys.just_pressed(KeyCode::KeyF) {
         intent.selection = Some(WeaponSelection::Previous);
     }

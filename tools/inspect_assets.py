@@ -152,6 +152,15 @@ def main():
     print(
         "Dust2: all 11 authored surface materials use lit shading; original textures retained"
     )
+    document, _ = read_glb(ROOT / "assets/generated/mirage.glb")
+    assert document["materials"]
+    assert all(
+        "KHR_materials_unlit" not in m.get("extensions", {})
+        for m in document["materials"]
+    )
+    print(
+        f"Mirage: {len(document['materials'])} surface materials use lit shading"
+    )
 
 
 if __name__ == "__main__":
