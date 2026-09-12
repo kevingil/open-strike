@@ -165,13 +165,20 @@ fn setup(mut commands: Commands, previews: Res<CharacterPreviews>, server: Res<A
                                         spawn_preset(equipment, name);
                                     }
                                     equipment.spawn(label("Knife · Both teams", 11., MUTED));
-                                    for knife in [WeaponId::DefaultKnife, WeaponId::ReferenceKnife]
+                                    for knife in WeaponId::ALL.iter().copied().filter(|w| w.is_knife())
                                     {
                                         equipment
                                             .spawn((
                                                 LoadoutButton::Melee(knife),
                                                 Button,
-                                                cell(),
+                                                Node {
+                                                    min_height: Val::Px(28.),
+                                                    padding: UiRect::axes(Val::Px(5.), Val::Px(3.)),
+                                                    align_items: AlignItems::Center,
+                                                    justify_content: JustifyContent::Center,
+                                                    border: UiRect::bottom(Val::Px(1.)),
+                                                    ..default()
+                                                },
                                                 BackgroundColor(Color::NONE),
                                                 BorderColor(Color::NONE),
                                             ))
@@ -281,35 +288,36 @@ fn setup(mut commands: Commands, previews: Res<CharacterPreviews>, server: Res<A
                         ..default()
                     })
                     .with_children(|items| {
-                        // The current inventory has one buy-menu weapon. The knife is not a purchase selection.
-                        items
-                            .spawn((
-                                LoadoutButton::Weapon(WeaponId::AK47),
-                                Button,
-                                Node {
-                                    width: Val::Px(200.),
-                                    flex_direction: FlexDirection::Column,
-                                    padding: UiRect::all(Val::Px(8.)),
-                                    row_gap: Val::Px(5.),
-                                    border: UiRect::bottom(Val::Px(2.)),
-                                    ..default()
-                                },
-                                BackgroundColor(Color::NONE),
-                                BorderColor(Color::NONE),
-                            ))
-                            .with_children(|weapon| {
-                                weapon.spawn((
-                                    ImageNode::new(server.load("generated/ui/inventory/ak47.png")),
+                        for weapon in WeaponId::ALL.iter().copied().filter(|w| !w.is_knife()) {
+                            items
+                                .spawn((
+                                    LoadoutButton::Weapon(weapon),
+                                    Button,
                                     Node {
-                                        width: Val::Px(128.),
-                                        height: Val::Px(76.),
-                                        align_self: AlignSelf::Center,
+                                        width: Val::Px(200.),
+                                        flex_direction: FlexDirection::Column,
+                                        padding: UiRect::all(Val::Px(8.)),
+                                        row_gap: Val::Px(5.),
+                                        border: UiRect::bottom(Val::Px(2.)),
                                         ..default()
                                     },
-                                ));
-                                weapon.spawn(label("AK-47", 16., WHITE));
-                                weapon.spawn((WeaponStatus(WeaponId::AK47), label("", 12., MUTED)));
-                            });
+                                    BackgroundColor(Color::NONE),
+                                    BorderColor(Color::NONE),
+                                ))
+                                .with_children(|card| {
+                                    card.spawn((
+                                        ImageNode::new(server.load(weapon.inventory_path())),
+                                        Node {
+                                            width: Val::Px(128.),
+                                            height: Val::Px(76.),
+                                            align_self: AlignSelf::Center,
+                                            ..default()
+                                        },
+                                    ));
+                                    card.spawn(label(weapon.name(), 16., WHITE));
+                                    card.spawn((WeaponStatus(weapon), label("", 12., MUTED)));
+                                });
+                        }
                         items.spawn((
                             EmptyInventory,
                             label("No weapons available in this category yet.", 18., MUTED),
@@ -410,7 +418,11 @@ fn interact(
                     slot.category,
                     slot.index,
                     Some(weapon),
+                    editor.side,
                 );
+                if !weapon.is_knife() {
+                    loadout.primary_weapon = weapon;
+                }
             }
             LoadoutButton::Melee(knife) => loadout.melee_weapon = knife,
             LoadoutButton::Clear => {
@@ -418,7 +430,7 @@ fn interact(
                 loadout
                     .buy_weapons
                     .side_mut(editor.side)
-                    .set(slot.category, slot.index, None);
+                    .set(slot.category, slot.index, None, editor.side);
             }
         }
     }
@@ -457,7 +469,7 @@ fn refresh(
     let accent = editor.side.color();
     for (button, interaction, mut node, mut background, mut border) in &mut buttons {
         let visible = match *button {
-            LoadoutButton::Weapon(weapon) => selected.category.accepts(weapon),
+            LoadoutButton::Weapon(weapon) => selected.category.accepts_for(weapon, editor.side),
             LoadoutButton::Clear => side.slots(selected.category)[selected.index].is_some(),
             _ => true,
         };
@@ -492,7 +504,7 @@ fn refresh(
     for mut node in &mut empty {
         node.display = if WeaponId::all()
             .into_iter()
-            .any(|weapon| selected.category.accepts(weapon))
+            .any(|weapon| selected.category.accepts_for(weapon, editor.side))
         {
             Display::None
         } else {
