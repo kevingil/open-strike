@@ -113,6 +113,7 @@ impl Plugin for GamePlugin {
             RapierDebugRenderPlugin::default().disabled(),
             crate::game::debug::DebugPlugin,
             window::WindowSettingsPlugin,
+            crate::game::local::LocalStorePlugin,
             crate::game::hub::HubPlugin,
             crate::game::net::client::NetClientPlugin,
             ui::UiPlugin,
