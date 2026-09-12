@@ -83,7 +83,10 @@ impl Plugin for FriendsDrawerPlugin {
             .init_resource::<SearchDebounce>()
             .add_systems(Startup, setup)
             .add_systems(PostStartup, setup_page_clip)
-            .add_systems(Update, (update, rebuild, actions, submits, search_typing, badges))
+            .add_systems(
+                Update,
+                (update, rebuild, actions, submits, search_typing, badges),
+            )
             .add_systems(
                 PostUpdate,
                 clip_to_drawer.before(bevy::ui::UiSystem::Layout),
@@ -280,8 +283,8 @@ fn update(
         state.away += time.delta_secs();
     }
     // Keep the drawer open while a field inside it has keyboard focus.
-    let open = !state.dismissed
-        && (hover || state.away < 0.12 || state.pinned || state.focused || typing);
+    let open =
+        !state.dismissed && (hover || state.away < 0.12 || state.pinned || state.focused || typing);
     let delta = time.delta_secs() / 0.2;
     state.progress = (state.progress + if open { delta } else { -delta }).clamp(0., 1.);
     root.width = Val::Px(56. + (expanded - 56.) * state.progress);
@@ -368,10 +371,23 @@ fn action_button(
     if enabled {
         entity.insert(Button);
     }
-    entity.with_child(label(text, 15., if enabled { WHITE } else { MUTED.with_alpha(0.5) }));
+    entity.with_child(label(
+        text,
+        15.,
+        if enabled {
+            WHITE
+        } else {
+            MUTED.with_alpha(0.5)
+        },
+    ));
 }
 
-fn small_button(parent: &mut ChildSpawnerCommands, action: DrawerAction, text: &str, enabled: bool) {
+fn small_button(
+    parent: &mut ChildSpawnerCommands,
+    action: DrawerAction,
+    text: &str,
+    enabled: bool,
+) {
     let mut entity = parent.spawn((
         action,
         Node {
@@ -380,12 +396,24 @@ fn small_button(parent: &mut ChildSpawnerCommands, action: DrawerAction, text: &
             ..default()
         },
         BackgroundColor(Color::srgba(1., 1., 1., if enabled { 0.06 } else { 0.02 })),
-        BorderColor(if enabled { ACCENT.with_alpha(0.6) } else { Color::NONE }),
+        BorderColor(if enabled {
+            ACCENT.with_alpha(0.6)
+        } else {
+            Color::NONE
+        }),
     ));
     if enabled {
         entity.insert(Button);
     }
-    entity.with_child(label(text, 12., if enabled { ACCENT } else { MUTED.with_alpha(0.5) }));
+    entity.with_child(label(
+        text,
+        12.,
+        if enabled {
+            ACCENT
+        } else {
+            MUTED.with_alpha(0.5)
+        },
+    ));
 }
 
 fn person_row(
@@ -423,9 +451,10 @@ fn person_row(
                     let mode = crate::game::config::GameMode::from_key(mode)
                         .map(|m| m.name())
                         .unwrap_or("match");
-                    let map = crate::game::config::MapId::from_key(server["map"].as_str().unwrap_or(""))
-                        .map(|m| m.name())
-                        .unwrap_or("");
+                    let map =
+                        crate::game::config::MapId::from_key(server["map"].as_str().unwrap_or(""))
+                            .map(|m| m.name())
+                            .unwrap_or("");
                     format!("In match · {map} {mode}")
                 } else {
                     match presence.state.as_str() {
@@ -455,20 +484,54 @@ fn person_row(
                         let id = server["server_id"].as_str().unwrap_or("").to_string();
                         small_button(buttons, DrawerAction::Join(id), "JOIN", online);
                     }
-                    small_button(buttons, DrawerAction::Remove(entry.username.clone()), "×", online);
+                    small_button(
+                        buttons,
+                        DrawerAction::Remove(entry.username.clone()),
+                        "×",
+                        online,
+                    );
                 }
                 RowKind::PendingIn => {
-                    small_button(buttons, DrawerAction::Accept(entry.username.clone()), "ACCEPT", online);
-                    small_button(buttons, DrawerAction::Decline(entry.username.clone()), "×", online);
+                    small_button(
+                        buttons,
+                        DrawerAction::Accept(entry.username.clone()),
+                        "ACCEPT",
+                        online,
+                    );
+                    small_button(
+                        buttons,
+                        DrawerAction::Decline(entry.username.clone()),
+                        "×",
+                        online,
+                    );
                 }
                 RowKind::PendingOut => {
-                    small_button(buttons, DrawerAction::Remove(entry.username.clone()), "SENT", false);
+                    small_button(
+                        buttons,
+                        DrawerAction::Remove(entry.username.clone()),
+                        "SENT",
+                        false,
+                    );
                 }
                 RowKind::Search => match entry.relationship.as_str() {
-                    "friends" => small_button(buttons, DrawerAction::DismissNotice, "FRIENDS", false),
-                    "pending_out" => small_button(buttons, DrawerAction::DismissNotice, "SENT", false),
-                    "pending_in" => small_button(buttons, DrawerAction::Accept(entry.username.clone()), "ACCEPT", online),
-                    _ => small_button(buttons, DrawerAction::AddFriend(entry.username.clone()), "ADD", online),
+                    "friends" => {
+                        small_button(buttons, DrawerAction::DismissNotice, "FRIENDS", false)
+                    }
+                    "pending_out" => {
+                        small_button(buttons, DrawerAction::DismissNotice, "SENT", false)
+                    }
+                    "pending_in" => small_button(
+                        buttons,
+                        DrawerAction::Accept(entry.username.clone()),
+                        "ACCEPT",
+                        online,
+                    ),
+                    _ => small_button(
+                        buttons,
+                        DrawerAction::AddFriend(entry.username.clone()),
+                        "ADD",
+                        online,
+                    ),
                 },
             });
         });
@@ -515,7 +578,12 @@ fn rebuild(
     let hub_name = if health.hub_name.is_empty() {
         client
             .as_ref()
-            .map(|c| c.url.trim_start_matches("http://").trim_start_matches("https://").to_string())
+            .map(|c| {
+                c.url
+                    .trim_start_matches("http://")
+                    .trim_start_matches("https://")
+                    .to_string()
+            })
             .unwrap_or_default()
     } else {
         health.hub_name.clone()
@@ -620,7 +688,11 @@ fn rebuild(
                     }
                 } else {
                     if friends.friends.is_empty() && friends.pending_out.is_empty() {
-                        content.spawn(label("No friends yet. Search a username above.", 13., MUTED));
+                        content.spawn(label(
+                            "No friends yet. Search a username above.",
+                            13.,
+                            MUTED,
+                        ));
                     }
                     for entry in &friends.friends {
                         person_row(content, entry, !offline, RowKind::Friend);
@@ -643,9 +715,19 @@ fn rebuild(
                     ..default()
                 });
                 action_button(content, DrawerAction::ShowLogin, "LOG IN", true, enabled);
-                action_button(content, DrawerAction::ShowRegister, "CREATE ACCOUNT", false, enabled);
+                action_button(
+                    content,
+                    DrawerAction::ShowRegister,
+                    "CREATE ACCOUNT",
+                    false,
+                    enabled,
+                );
                 content.spawn((
-                    label("Local play works without an account.", 12., MUTED.with_alpha(0.8)),
+                    label(
+                        "Local play works without an account.",
+                        12.,
+                        MUTED.with_alpha(0.8),
+                    ),
                     Node {
                         margin: UiRect::top(Val::Px(20.)),
                         ..default()
@@ -662,7 +744,11 @@ fn rebuild(
                 action_button(
                     content,
                     DrawerAction::SubmitLogin,
-                    if forms.busy { "SIGNING IN…" } else { "LOG IN" },
+                    if forms.busy {
+                        "SIGNING IN…"
+                    } else {
+                        "LOG IN"
+                    },
                     true,
                     enabled,
                 );
@@ -676,7 +762,11 @@ fn rebuild(
             (_, FormMode::Register) => {
                 section(content, "CREATE ACCOUNT", 12.);
                 spawn_text_field(content, FieldId::Username, "username");
-                content.spawn(label("3 to 20 letters, digits or underscores", 11., MUTED.with_alpha(0.7)));
+                content.spawn(label(
+                    "3 to 20 letters, digits or underscores",
+                    11.,
+                    MUTED.with_alpha(0.7),
+                ));
                 spawn_text_field(content, FieldId::Email, "email (for account recovery)");
                 spawn_text_field(content, FieldId::Password, "password (8+ characters)");
                 spawn_text_field(content, FieldId::Confirm, "confirm password");
@@ -686,7 +776,11 @@ fn rebuild(
                 action_button(
                     content,
                     DrawerAction::SubmitRegister,
-                    if forms.busy { "CREATING…" } else { "CREATE ACCOUNT" },
+                    if forms.busy {
+                        "CREATING…"
+                    } else {
+                        "CREATE ACCOUNT"
+                    },
                     true,
                     enabled,
                 );
