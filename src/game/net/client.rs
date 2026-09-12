@@ -266,6 +266,7 @@ fn spawn_local(
             melee_weapon: loadout.melee_weapon,
             skin: team_skin(welcome.team),
             map,
+            cosmetic: true,
         },
     );
     let net_id = welcome.net_id;
@@ -375,6 +376,7 @@ fn apply_snapshot(
                         melee_weapon: crate::game::config::WeaponId::DefaultKnife,
                         skin: team_skin(state.team),
                         map,
+                        cosmetic: true,
                     },
                 );
                 commands.entity(body).insert(NetPuppet {

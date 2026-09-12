@@ -252,6 +252,7 @@ fn spawn_bots(
                 melee_weapon: WeaponId::DefaultKnife,
                 skin: team_skin(team),
                 map,
+                cosmetic: false,
             },
         );
         commands.entity(body).insert(NetIdentity(net_id));
@@ -494,6 +495,7 @@ fn spawn_pending_remotes(
                     melee_weapon: WeaponId::DefaultKnife,
                     skin: team_skin(conn.team),
                     map,
+                    cosmetic: false,
                 },
             );
             commands

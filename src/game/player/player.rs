@@ -93,6 +93,8 @@ pub struct ActorSpawn<'a> {
     pub melee_weapon: crate::game::config::WeaponId,
     pub skin: SkinId,
     pub map: &'a crate::game::map::MapConfig,
+    /// Spawn the visible character; the dedicated server has nothing to draw.
+    pub cosmetic: bool,
 }
 
 /// Spawns a logical body, its cosmetic model and hit zones. Returns the body.
@@ -214,19 +216,21 @@ pub fn spawn_actor(
         }
         ActorKind::Remote | ActorKind::Puppet => {}
     }
-    let gltf = gltfs.get(&assets.skins[team.index()]).unwrap();
-    commands.spawn((
-        PlayerEntity,
-        PlayerModel {
-            logical_entity: body,
-            is_local_player: local,
-        },
-        CharacterRig(spawn.skin),
-        PlayerAnimationController::default(),
-        SceneRoot(gltf.scenes[0].clone()),
-        Transform::from_translation(feet),
-        Visibility::Inherited,
-    ));
+    if spawn.cosmetic {
+        let gltf = gltfs.get(&assets.skins[team.index()]).unwrap();
+        commands.spawn((
+            PlayerEntity,
+            PlayerModel {
+                logical_entity: body,
+                is_local_player: local,
+            },
+            CharacterRig(spawn.skin),
+            PlayerAnimationController::default(),
+            SceneRoot(gltf.scenes[0].clone()),
+            Transform::from_translation(feet),
+            Visibility::Inherited,
+        ));
+    }
     for (kind, zone) in [
         (HitboxZoneType::Head, &STANDARD_HITBOX.head),
         (HitboxZoneType::Torso, &STANDARD_HITBOX.torso),
@@ -363,6 +367,7 @@ fn init_player(
                 melee_weapon: loadout.melee_weapon,
                 skin: team_skin(team),
                 map,
+                cosmetic: true,
             },
         );
     }
