@@ -9,7 +9,7 @@ pub const PROTOCOL_VERSION: u16 = 1;
 pub const MAX_DATAGRAM: usize = 60_000;
 /// Snapshots and inputs both go once per fixed tick.
 pub const TICK_HZ: f64 = 64.0;
-pub const CLIENT_TIMEOUT_SECS: f32 = 8.0;
+pub const CLIENT_TIMEOUT_SECS: f32 = 15.0;
 pub const EVENT_HISTORY: usize = 64;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -20,6 +20,8 @@ pub enum ClientMessage {
         name: String,
     },
     Input(PlayerInput),
+    /// Keeps the seat while the client is still loading the map.
+    Ping,
     Leave,
 }
 

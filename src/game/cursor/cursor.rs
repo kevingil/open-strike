@@ -34,6 +34,7 @@ fn manage_cursor(
     if *state.get() == GameState::Playing
         && windows.single().is_ok_and(|w| !w.focused)
         && std::env::var_os("CSRS_CAPTURE").is_none()
+        && std::env::var_os("CSRS_ONLINE_SCENARIO").is_none()
     {
         next.set(GameState::Paused);
     }

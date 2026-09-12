@@ -319,7 +319,7 @@ fn receive_idle(net: Option<ResMut<ServerNet>>, time: Res<Time<bevy::time::Real>
             Err(_) => break,
         };
         let bytes = net.buffer[..len].to_vec();
-        if let Some(ClientMessage::Input(_)) = decode::<ClientMessage>(&bytes) {
+        if let Some(ClientMessage::Input(_) | ClientMessage::Ping) = decode::<ClientMessage>(&bytes) {
             if let Some(conn) = net.clients.get_mut(&addr) {
                 conn.last_seen = now;
             }
@@ -413,6 +413,11 @@ fn receive(
                         conn.last_seq = input.seq;
                         conn.latest = Some(input);
                     }
+                }
+            }
+            ClientMessage::Ping => {
+                if let Some(conn) = net.clients.get_mut(&addr) {
+                    conn.last_seen = now;
                 }
             }
             ClientMessage::Leave => {

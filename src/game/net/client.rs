@@ -165,19 +165,28 @@ impl Plugin for NetClientPlugin {
     }
 }
 
-/// Reads every datagram, keeps the newest snapshot, and repeats Join until welcomed.
-fn pump(mut net: ResMut<ClientNet>, time: Res<Time<bevy::time::Real>>) {
+/// Reads every datagram, keeps the newest snapshot, repeats Join until welcomed and
+/// pings while the map is still loading so the server keeps the seat.
+fn pump(
+    mut net: ResMut<ClientNet>,
+    time: Res<Time<bevy::time::Real>>,
+    state: Res<State<GameState>>,
+) {
     let net = &mut *net;
     let now = time.elapsed_secs_f64();
-    if matches!(net.state, ConnState::Connecting) && now - net.last_join_sent > 0.5 {
+    if now - net.last_join_sent > 0.5 {
         net.last_join_sent = now;
-        net.connect_started.get_or_insert(now);
-        let join = ClientMessage::Join {
-            version: PROTOCOL_VERSION,
-            ticket: net.ticket.clone(),
-            name: net.name.clone(),
-        };
-        net.send(&join);
+        if matches!(net.state, ConnState::Connecting) {
+            net.connect_started.get_or_insert(now);
+            let join = ClientMessage::Join {
+                version: PROTOCOL_VERSION,
+                ticket: net.ticket.clone(),
+                name: net.name.clone(),
+            };
+            net.send(&join);
+        } else if net.welcomed() && *state.get() != GameState::Playing {
+            net.send(&ClientMessage::Ping);
+        }
     }
     loop {
         let (len, addr) = match net.socket.recv_from(&mut net.buffer) {
