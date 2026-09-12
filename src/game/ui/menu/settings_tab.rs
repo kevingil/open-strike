@@ -5,7 +5,7 @@ use bevy::{
 };
 
 use super::{style::*, MenuPage, MenuTab, PlayerSettings};
-use crate::game::GameState;
+use crate::game::{config::BotDifficulty, GameState};
 
 pub struct SettingsTabPlugin;
 
@@ -38,6 +38,7 @@ enum Category {
     Video,
     Audio,
     Mouse,
+    Gameplay,
 }
 
 impl Category {
@@ -47,6 +48,7 @@ impl Category {
             Self::Video => "VIDEO",
             Self::Audio => "AUDIO",
             Self::Mouse => "KEYBOARD / MOUSE",
+            Self::Gameplay => "GAMEPLAY",
         }
     }
 }
@@ -117,6 +119,8 @@ struct SliderThumb(Setting);
 #[derive(Component)]
 struct SettingValue(Setting);
 #[derive(Component)]
+struct DifficultyButton(BotDifficulty);
+#[derive(Component)]
 struct SettingsScroll;
 #[derive(Component)]
 struct ResetButton;
@@ -161,6 +165,7 @@ fn setup(mut commands: Commands, settings: Res<PlayerSettings>) {
                     Category::Video,
                     Category::Audio,
                     Category::Mouse,
+                    Category::Gameplay,
                 ] {
                     tabs.spawn((
                         CategoryButton(category),
@@ -200,28 +205,18 @@ fn setup(mut commands: Commands, settings: Res<PlayerSettings>) {
                         ..default()
                     })
                     .with_children(|content| {
-                        for setting in [Setting::Fov, Setting::Volume, Setting::Sensitivity] {
-                            content
-                                .spawn((
-                                    Section(setting.category()),
-                                    Node {
-                                        width: Val::Percent(100.),
-                                        flex_direction: FlexDirection::Column,
-                                        margin: UiRect::bottom(Val::Px(30.)),
-                                        ..default()
-                                    },
-                                ))
-                                .with_children(|section| {
-                                    section.spawn((
-                                        label(setting.category().title(), 15., MUTED),
-                                        Node {
-                                            margin: UiRect::bottom(Val::Px(12.)),
-                                            ..default()
-                                        },
-                                    ));
-                                    spawn_slider(section, setting, &settings);
-                                });
-                        }
+                        spawn_section(content, Category::Video, |section| {
+                            spawn_slider(section, Setting::Fov, &settings);
+                        });
+                        spawn_section(content, Category::Audio, |section| {
+                            spawn_slider(section, Setting::Volume, &settings);
+                        });
+                        spawn_section(content, Category::Mouse, |section| {
+                            spawn_slider(section, Setting::Sensitivity, &settings);
+                        });
+                        spawn_section(content, Category::Gameplay, |section| {
+                            spawn_difficulty(section, &settings);
+                        });
                     });
             });
             root.spawn((
@@ -243,7 +238,7 @@ fn setup(mut commands: Commands, settings: Res<PlayerSettings>) {
             ))
             .with_children(|footer| {
                 footer.spawn(label(
-                    "Changes apply immediately for this session",
+                    "Saved on this device with your account session and loadout",
                     14.,
                     MUTED,
                 ));
@@ -261,6 +256,33 @@ fn setup(mut commands: Commands, settings: Res<PlayerSettings>) {
                     ))
                     .with_child(label("RESET TO DEFAULT", 14., WHITE));
             });
+        });
+}
+
+fn spawn_section(
+    parent: &mut ChildSpawnerCommands,
+    category: Category,
+    spawn_rows: impl FnOnce(&mut ChildSpawnerCommands),
+) {
+    parent
+        .spawn((
+            Section(category),
+            Node {
+                width: Val::Percent(100.),
+                flex_direction: FlexDirection::Column,
+                margin: UiRect::bottom(Val::Px(30.)),
+                ..default()
+            },
+        ))
+        .with_children(|section| {
+            section.spawn((
+                label(category.title(), 15., MUTED),
+                Node {
+                    margin: UiRect::bottom(Val::Px(12.)),
+                    ..default()
+                },
+            ));
+            spawn_rows(section);
         });
 }
 
@@ -358,6 +380,69 @@ fn spawn_slider(parent: &mut ChildSpawnerCommands, setting: Setting, settings: &
         });
 }
 
+fn spawn_difficulty(parent: &mut ChildSpawnerCommands, settings: &PlayerSettings) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(100.),
+                min_height: Val::Px(66.),
+                padding: UiRect::axes(Val::Px(0.), Val::Px(12.)),
+                border: UiRect::bottom(Val::Px(1.)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                column_gap: Val::Px(24.),
+                row_gap: Val::Px(8.),
+                flex_wrap: FlexWrap::Wrap,
+                ..default()
+            },
+            BorderColor(LINE),
+        ))
+        .with_children(|row| {
+            row.spawn(Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(6.),
+                ..default()
+            })
+            .with_children(|copy| {
+                copy.spawn(label("Bot Difficulty", 19., WHITE));
+                copy.spawn(label(
+                    "How quickly local bots aim and how long they hold fire",
+                    14.,
+                    MUTED,
+                ));
+            });
+            row.spawn(Node {
+                column_gap: Val::Px(8.),
+                ..default()
+            })
+            .with_children(|choices| {
+                for difficulty in BotDifficulty::ALL {
+                    let selected = settings.bot_difficulty == difficulty;
+                    choices
+                        .spawn((
+                            DifficultyButton(difficulty),
+                            Button,
+                            Node {
+                                min_width: Val::Px(92.),
+                                padding: UiRect::axes(Val::Px(16.), Val::Px(8.)),
+                                border: UiRect::all(Val::Px(1.)),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            BackgroundColor(if selected {
+                                GLASS_SELECTED
+                            } else {
+                                Color::NONE
+                            }),
+                            BorderColor(if selected { ACCENT } else { LINE }),
+                        ))
+                        .with_child(label(difficulty.name().to_uppercase(), 14., WHITE));
+                }
+            });
+        });
+}
+
 fn select_category(
     mut category: ResMut<Category>,
     mut buttons: Query<(
@@ -400,6 +485,7 @@ fn select_category(
 fn interact(
     category: Res<Category>,
     sliders: Query<(&Slider, &Interaction, &RelativeCursorPosition)>,
+    difficulties: Query<(&DifficultyButton, &Interaction)>,
     mut resets: Query<(&Interaction, &mut BackgroundColor), With<ResetButton>>,
     mut settings: ResMut<PlayerSettings>,
 ) {
@@ -409,6 +495,13 @@ fn interact(
         {
             if let Some(position) = cursor.normalized {
                 slider.0.set(&mut settings, position.x);
+            }
+        }
+    }
+    if *category == Category::All || *category == Category::Gameplay {
+        for (button, interaction) in &difficulties {
+            if *interaction == Interaction::Pressed {
+                settings.bot_difficulty = button.0;
             }
         }
     }
@@ -425,6 +518,9 @@ fn interact(
                     setting.set(&mut settings, setting.normalized(&defaults));
                 }
             }
+            if *category == Category::All || *category == Category::Gameplay {
+                settings.bot_difficulty = defaults.bot_difficulty;
+            }
         }
     }
 }
@@ -434,18 +530,34 @@ fn refresh(
     mut fills: Query<(&SliderFill, &mut Node), Without<SliderThumb>>,
     mut thumbs: Query<(&SliderThumb, &mut Node), Without<SliderFill>>,
     mut values: Query<(&SettingValue, &mut Text)>,
+    mut difficulties: Query<(
+        &DifficultyButton,
+        &Interaction,
+        &mut BackgroundColor,
+        &mut BorderColor,
+    )>,
 ) {
-    if !settings.is_changed() {
-        return;
+    if settings.is_changed() {
+        for (fill, mut node) in &mut fills {
+            node.width = Val::Percent(fill.0.normalized(&settings) * 100.);
+        }
+        for (thumb, mut node) in &mut thumbs {
+            node.left = Val::Percent(thumb.0.normalized(&settings) * 100.);
+        }
+        for (value, mut text) in &mut values {
+            **text = value.0.value(&settings);
+        }
     }
-    for (fill, mut node) in &mut fills {
-        node.width = Val::Percent(fill.0.normalized(&settings) * 100.);
-    }
-    for (thumb, mut node) in &mut thumbs {
-        node.left = Val::Percent(thumb.0.normalized(&settings) * 100.);
-    }
-    for (value, mut text) in &mut values {
-        **text = value.0.value(&settings);
+    for (button, interaction, mut background, mut border) in &mut difficulties {
+        let selected = button.0 == settings.bot_difficulty;
+        background.0 = if selected {
+            GLASS_SELECTED
+        } else if *interaction == Interaction::Hovered {
+            Color::srgba(1., 1., 1., 0.06)
+        } else {
+            Color::NONE
+        };
+        border.0 = if selected { ACCENT } else { LINE };
     }
 }
 
