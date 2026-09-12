@@ -43,6 +43,21 @@ impl SkinId {
     pub fn all() -> Vec<SkinId> {
         vec![SkinId::Soldier, SkinId::Police]
     }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Soldier => "soldier",
+            Self::Police => "police",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "soldier" => Some(Self::Soldier),
+            "police" => Some(Self::Police),
+            _ => None,
+        }
+    }
 }
 
 /// Hitbox zone type for damage calculation

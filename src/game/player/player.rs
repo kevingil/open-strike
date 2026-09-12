@@ -91,6 +91,7 @@ pub struct ActorSpawn<'a> {
     /// Feet position and yaw in radians; taken from the map's spawn points when None.
     pub placement: Option<(Vec3, f32)>,
     pub melee_weapon: crate::game::config::WeaponId,
+    pub primary_weapon: crate::game::config::WeaponId,
     pub skin: SkinId,
     pub map: &'a crate::game::map::MapConfig,
     /// Spawn the visible character; the dedicated server has nothing to draw.
@@ -169,16 +170,9 @@ pub fn spawn_actor(
             combatant,
             super::presentation::PoseHistory::new(center, yaw),
             ActorIntent::default(),
-            crate::game::weapons::WeaponState {
-                melee_weapon: spawn.melee_weapon,
-                previous: spawn.melee_weapon,
-                ..default()
-            },
+            crate::game::weapons::WeaponState::armed(spawn.primary_weapon, spawn.melee_weapon),
             crate::game::weapons::audio::AudioState::default(),
-            FpsControllerInput {
-                yaw,
-                ..default()
-            },
+            FpsControllerInput { yaw, ..default() },
             FpsController {
                 enable_input: false,
                 radius: BODY_RADIUS,
@@ -281,12 +275,7 @@ pub fn spawn_actor(
         let camera = camera.id();
         if std::env::var_os("CSRS_NO_VIEWMODEL").is_none() {
             crate::game::weapons::viewmodel::spawn(
-                commands,
-                assets,
-                gltfs,
-                body,
-                camera,
-                spawn.skin,
+                commands, assets, gltfs, body, camera, spawn.skin,
             );
         }
     }
@@ -365,6 +354,11 @@ fn init_player(
                 name: None,
                 placement,
                 melee_weapon: loadout.melee_weapon,
+                primary_weapon: loadout.spawn_gun(if team == Team::Defender {
+                    crate::game::player::skins::PlayerSide::Defender
+                } else {
+                    crate::game::player::skins::PlayerSide::Attacker
+                }),
                 skin: team_skin(team),
                 map,
                 cosmetic: true,
