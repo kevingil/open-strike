@@ -427,7 +427,7 @@ fn update(
                     }
                 }
                 Label::Timer => {
-                    if config.mode == GameMode::TeamDeathmatch {
+                    if config.mode.scored() {
                         format!("{:02}:{:02}", remaining / 60, remaining % 60)
                     } else {
                         "--:--".into()
@@ -437,13 +437,11 @@ fn update(
                 Label::AliveT => alive[Team::Attacker.index()].to_string(),
                 Label::AliveCt => alive[Team::Defender.index()].to_string(),
                 Label::Location => location.into(),
-                Label::Mode => {
-                    if config.mode == GameMode::TeamDeathmatch {
-                        "TDM".into()
-                    } else {
-                        "PRACTICE".into()
-                    }
-                }
+                Label::Mode => match config.mode {
+                    GameMode::TeamDeathmatch => "TDM".into(),
+                    GameMode::Deathmatch => "DM".into(),
+                    GameMode::Freemode => "PRACTICE".into(),
+                },
             };
         }
         for (bar, mut node) in &mut bars {

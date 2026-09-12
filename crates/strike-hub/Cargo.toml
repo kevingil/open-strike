@@ -1,0 +1,16 @@
+[package]
+name = "strike-hub"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Accounts, friends and match server registry for Open Strike"
+
+[dependencies]
+axum = { version = "0.8", features = ["json"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "process", "sync"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+argon2 = "0.5"
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hex = "0.4"

@@ -6,6 +6,21 @@ license = "MIT"
 description = "Open-source first-person tactical shooter"
 exclude = ["assets/audio/csgo/**", "assets/audio/local/**"]
 
+[workspace]
+members = [".", "crates/strike-hub"]
+
+[lib]
+name = "open_strike"
+path = "src/lib.rs"
+
+[[bin]]
+name = "open-strike"
+path = "src/main.rs"
+
+[[bin]]
+name = "strike-server"
+path = "src/bin/strike_server.rs"
+
 [dependencies]
 bevy = { version = "0.16", features = ["dynamic_linking", "jpeg", "wav"] }
 bevy_rapier3d = "0.30"
@@ -13,5 +28,8 @@ bevy_fps_controller = "0.16"
 bevy_common_assets = { version = "0.13", features = ["ron"] }
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.8.5"
+serde_json = "1"
+bincode = "1.3"
+ureq = { version = "2", features = ["json"] }
 [profile.dev]
 opt-level = 1

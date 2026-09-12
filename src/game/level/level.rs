@@ -115,6 +115,7 @@ fn load_level(
         Res<Time<bevy::time::Real>>,
         Res<GameConfig>,
         Res<SoundLibrary>,
+        Option<Res<crate::game::net::client::ClientNet>>,
     ),
     mut commands: Commands,
     server: Res<AssetServer>,
@@ -130,7 +131,7 @@ fn load_level(
     instances: Query<&bevy::scene::SceneInstance, With<LevelEntity>>,
     context: ReadRapierContext,
 ) {
-    let (tick, time, game, sounds) = runtime;
+    let (tick, time, game, sounds, net) = runtime;
     if time.elapsed_secs() - status.started > 60.0 {
         status.message =
             "Loading timed out after 60 seconds. Check the required assets and collision geometry."
@@ -156,7 +157,7 @@ fn load_level(
             next.set(GameState::LoadFailed);
             return;
         }
-        if game.mode == crate::game::config::GameMode::TeamDeathmatch
+        if game.mode.scored()
             && (config.navigation.is_empty()
                 || config.patrol_destinations.is_empty()
                 || config
@@ -169,12 +170,13 @@ fn load_level(
                 ]
                 .iter()
                 .any(|team| {
-                    config
-                        .spawn_points
-                        .iter()
-                        .filter(|s| s.team == Some(*team))
-                        .count()
-                        < 3
+                    game.mode.teams()
+                        && config
+                            .spawn_points
+                            .iter()
+                            .filter(|s| s.team == Some(*team))
+                            .count()
+                            < 3
                 }))
         {
             status.message =
@@ -354,7 +356,7 @@ fn load_level(
         }
     }
     let navigation = crate::game::bots::navigation::build(config, &physics);
-    if game.mode == crate::game::config::GameMode::TeamDeathmatch {
+    if game.mode.scored() {
         for spawn in &config.spawn_points {
             let Some(node) = navigation.nearest(
                 config
@@ -378,6 +380,17 @@ fn load_level(
         }
     }
     commands.insert_resource(navigation);
+    if let Some(net) = net.as_ref() {
+        if let Some(reason) = net.rejected() {
+            status.message = format!("Match server refused the connection: {reason}");
+            next.set(GameState::LoadFailed);
+            return;
+        }
+        if !net.welcomed() {
+            status.message = "Connecting to match server...".into();
+            return;
+        }
+    }
     info!("Map ready: {}", config.name);
     next.set(GameState::Playing);
 }

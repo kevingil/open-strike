@@ -90,7 +90,11 @@ fn think(
         let eye = transform.translation + Vec3::Y * 0.65;
         let target = actors
             .iter()
-            .filter(|(e, _, a)| *e != entity && a.alive() && a.team != actor.team)
+            .filter(|(e, _, a)| {
+                *e != entity
+                    && a.alive()
+                    && crate::game::matchplay::hostile(&config.mode, a.team, actor.team)
+            })
             .filter_map(|(e, t, _)| {
                 let point = t.translation + Vec3::Y * 0.25;
                 let distance = point.distance(eye);

@@ -4,6 +4,7 @@ use crate::game::{
     game::SimulationSet,
     level::level::LoadedGameplayMapConfig,
     player::player::BODY_HEIGHT,
+    net::NetRole,
     weapons::WeaponState,
     GameState,
 };
@@ -37,19 +38,40 @@ pub struct Combatant {
     pub respawn_remaining: f32,
     pub protection_remaining: f32,
     pub slot: usize,
+    /// Increments on every respawn so a networked client can detect the teleport.
+    pub respawn_seq: u32,
+    /// Stable identity on the wire; 0 for purely local actors.
+    pub net_id: u32,
 }
+pub const BOT_NAMES: [&str; 12] = [
+    "CEDAR", "MASON", "ROOK", "FLINT", "ASH", "BIRCH", "SLATE", "HOLLOW", "MARSH", "REED", "QUILL",
+    "VALE",
+];
 impl Combatant {
     pub fn new(team: Team, slot: usize) -> Self {
+        Self::named(
+            team,
+            slot,
+            if slot == 0 {
+                "YOU".to_string()
+            } else {
+                BOT_NAMES[(slot - 1) % BOT_NAMES.len()].to_string()
+            },
+        )
+    }
+    pub fn named(team: Team, slot: usize, name: String) -> Self {
         Self {
             team,
             health: 100.0,
             armor: 100.0,
-            name: ["YOU", "CEDAR", "MASON", "ROOK", "FLINT", "ASH"][slot % 6].into(),
+            name,
             kills: 0,
             deaths: 0,
             respawn_remaining: 0.0,
             protection_remaining: 2.0,
             slot,
+            respawn_seq: 0,
+            net_id: 0,
         }
     }
     pub fn alive(&self) -> bool {
@@ -101,8 +123,9 @@ fn reset_match(mut session: ResMut<MatchSession>) {
     *session = MatchSession::default();
 }
 
-fn update_match(
+pub fn update_match(
     time: Res<Time>,
+    role: Res<NetRole>,
     config: Res<GameConfig>,
     map: Res<LoadedGameplayMapConfig>,
     mut commands: Commands,
@@ -139,7 +162,7 @@ fn update_match(
     ) in &mut actors
     {
         actor.protection_remaining = (actor.protection_remaining - dt).max(0.0);
-        if transform.translation.y < -30.0 && actor.alive() {
+        if transform.translation.y < -30.0 && actor.alive() && !role.is_client() {
             commands.entity(entity).insert(ColliderDisabled);
             actor.health = 0.0;
             actor.deaths += 1;
@@ -154,6 +177,10 @@ fn update_match(
         intent.fire = false;
         intent.reload = false;
         intent.selection = None;
+        // A client only mirrors the server's respawn timer and teleport.
+        if role.is_client() {
+            continue;
+        }
         actor.respawn_remaining -= dt;
         if actor.respawn_remaining > 0.0 {
             continue;
@@ -162,7 +189,7 @@ fn update_match(
         let candidates: Vec<_> = map
             .spawn_points
             .iter()
-            .filter(|s| s.team.is_none() || s.team == Some(actor.team))
+            .filter(|s| !config.mode.teams() || s.team.is_none() || s.team == Some(actor.team))
             .collect();
         let Ok(physics) = context.single() else {
             continue;
@@ -211,27 +238,48 @@ fn update_match(
             actor.health = 100.0;
             actor.armor = 100.0;
             actor.protection_remaining = 2.0;
+            actor.respawn_seq = actor.respawn_seq.wrapping_add(1);
             positions.push((entity, center));
             info!("Respawn {:?} at {:?}", entity, feet);
             break;
         }
     }
-    if config.mode == GameMode::TeamDeathmatch
-        && (config
-            .match_settings
-            .time_limit
-            .is_some_and(|d| session.elapsed >= d.as_secs_f32())
-            || config
-                .match_settings
-                .score_limit
-                .is_some_and(|s| session.score.iter().any(|v| *v >= s)))
+    if role.is_client() || !config.mode.scored() {
+        return;
+    }
+    let top = actors
+        .iter()
+        .map(|(_, a, ..)| (a.kills, a.name.clone()))
+        .max_by_key(|(kills, _)| *kills);
+    let limit_hit = config
+        .match_settings
+        .score_limit
+        .is_some_and(|s| match config.mode {
+            GameMode::Deathmatch => top.as_ref().is_some_and(|(kills, _)| *kills >= s),
+            _ => session.score.iter().any(|v| *v >= s),
+        });
+    if config
+        .match_settings
+        .time_limit
+        .is_some_and(|d| session.elapsed >= d.as_secs_f32())
+        || limit_hit
     {
-        session.result = match session.score[0].cmp(&session.score[1]) {
-            std::cmp::Ordering::Greater => "ATTACKERS WIN",
-            std::cmp::Ordering::Less => "DEFENDERS WIN",
-            _ => "DRAW",
-        }
-        .into();
+        session.result = if config.mode == GameMode::Deathmatch {
+            top.map(|(_, name)| format!("{name} WINS"))
+                .unwrap_or_else(|| "DRAW".into())
+        } else {
+            match session.score[0].cmp(&session.score[1]) {
+                std::cmp::Ordering::Greater => "ATTACKERS WIN",
+                std::cmp::Ordering::Less => "DEFENDERS WIN",
+                _ => "DRAW",
+            }
+            .into()
+        };
         next.set(GameState::Finished);
     }
+}
+
+/// Free-for-all treats every other actor as hostile.
+pub fn hostile(mode: &GameMode, a: Team, b: Team) -> bool {
+    !mode.teams() || a != b
 }

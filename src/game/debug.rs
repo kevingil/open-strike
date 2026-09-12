@@ -45,6 +45,9 @@ impl Plugin for DebugPlugin {
                     .run_if(in_state(GameState::Playing)),
             );
         }
+        if std::env::var_os("CSRS_ONLINE_SCENARIO").is_some() {
+            app.add_plugins(crate::game::hub::scenario::ScenarioPlugin);
+        }
         if std::env::var_os("CSRS_CAPTURE_KILLS").is_some() {
             app.add_systems(Update, capture_kills.run_if(in_state(GameState::Playing)));
         }

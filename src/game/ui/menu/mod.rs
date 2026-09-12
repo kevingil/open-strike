@@ -18,6 +18,7 @@ pub mod scene_definition;
 pub mod settings_tab;
 mod start_button;
 pub mod style;
+pub mod text_field;
 #[derive(States, Default, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum MenuTab {
     #[default]
@@ -57,6 +58,7 @@ impl Plugin for MenuPlugin {
                 play_tab::PlayTabPlugin,
                 inventory_tab::InventoryTabPlugin,
                 loadout_tab::LoadoutTabPlugin,
+                text_field::TextFieldPlugin,
                 friends_drawer::FriendsDrawerPlugin,
                 settings_tab::SettingsTabPlugin,
             ));

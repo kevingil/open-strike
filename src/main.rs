@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-
-pub mod game;
+use open_strike::game;
 
 fn main() {
     App::new()

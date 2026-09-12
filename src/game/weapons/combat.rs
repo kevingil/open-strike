@@ -2,7 +2,8 @@ use super::{ShotFired, WeaponSelection, WeaponState, AK47, KNIFE};
 use crate::game::{
     config::{GameConfig, WeaponId},
     level::targets::{DeadTarget, Target},
-    matchplay::{ActorIntent, Combatant, MatchSession},
+    matchplay::{hostile, ActorIntent, Combatant, MatchSession},
+    net::NetRole,
     player::{
         player::{LocalPlayer, PlayerEntity},
         player_model::HitboxZoneMarker,
@@ -17,6 +18,7 @@ pub fn simulate_weapons(
     time: Res<Time>,
     context: ReadRapierContext,
     config: Res<GameConfig>,
+    role: Res<NetRole>,
     mut commands: Commands,
     mut shots: EventWriter<ShotFired>,
     mut session: ResMut<MatchSession>,
@@ -112,7 +114,7 @@ pub fn simulate_weapons(
                         if let Ok(zone) = zones.get(hit) {
                             if living.iter().any(|(e, team, protection)| {
                                 *e == zone.player_entity
-                                    && *team != actor.team
+                                    && hostile(&config.mode, *team, actor.team)
                                     && *protection <= 0.0
                             }) {
                                 damage.push((
@@ -217,7 +219,7 @@ pub fn simulate_weapons(
                 if let Some((_, team, protection)) =
                     living.iter().find(|(e, _, _)| *e == zone.player_entity)
                 {
-                    if *team != actor.team && *protection <= 0.0 {
+                    if hostile(&config.mode, *team, actor.team) && *protection <= 0.0 {
                         damage.push((
                             entity,
                             zone.player_entity,
@@ -239,6 +241,10 @@ pub fn simulate_weapons(
         if local.is_some() {
             input.pitch = (input.pitch + AK47.recoil).min(1.52);
         }
+    }
+    // Only the simulation authority awards damage; a client mirrors health from snapshots.
+    if role.is_client() {
+        damage.clear();
     }
     for (shooter, victim, amount, weapon_id, headshot) in damage {
         let mut killed = false;
