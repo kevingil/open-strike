@@ -13,9 +13,40 @@ pub struct MenuSceneDefinition {
 }
 pub const MENU_VERTICAL_FOV: f32 = 50.0;
 pub fn menu_scene(map: &MapId) -> MenuSceneDefinition {
-    // Internal practice maps explicitly fall back to the authored Dust 2 menu.
     match map {
+        MapId::Mirage => mirage(),
         MapId::Dust2 | MapId::Warehouse => dust2(),
+    }
+}
+fn mirage() -> MenuSceneDefinition {
+    MenuSceneDefinition {
+        scene: "generated/menu/mirage.glb#Scene0",
+        thumbnail: "generated/menu/mirage-card.png",
+        camera: Transform::from_xyz(0., 1.05, 2.4).looking_at(Vec3::new(0., 0.94, 0.), Vec3::Y),
+        character: Transform::from_rotation(Quat::from_rotation_y(-0.32)),
+        lighting: LightingConfig {
+            ambient_color: ColorRgb {
+                r: 0.86,
+                g: 0.84,
+                b: 0.78,
+            },
+            ambient_brightness: 5000.,
+            point_lights: vec![],
+            directional_lights: vec![DirectionalLightConfig {
+                direction: Vec3Config {
+                    x: -0.35,
+                    y: 1.,
+                    z: 0.55,
+                },
+                color: ColorRgb {
+                    r: 1.,
+                    g: 0.93,
+                    b: 0.78,
+                },
+                illuminance: 70000.,
+                shadows: true,
+            }],
+        },
     }
 }
 fn dust2() -> MenuSceneDefinition {
