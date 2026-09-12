@@ -86,6 +86,7 @@ fn run(
                     let path = path.to_string();
                     assert!(
                         !path.contains("generated/dust2.glb")
+                            && !path.contains("generated/mirage.glb")
                             && !path.contains("armory_map")
                             && !path.contains("warehouse_map"),
                         "Gameplay background loaded in menu"
