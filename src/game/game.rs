@@ -31,8 +31,9 @@ pub enum SimulationSet {
     Match,
 }
 
-pub struct GamePlugin;
-impl Plugin for GamePlugin {
+/// Simulation shared by the playable client and the dedicated server.
+struct CorePlugin;
+impl Plugin for CorePlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<GameState>()
             .add_systems(Startup, crate::game::assets::load_assets)
@@ -40,23 +41,20 @@ impl Plugin for GamePlugin {
             .init_resource::<PlayerLoadout>()
             .init_resource::<PlayerSettings>()
             .init_resource::<SkinRegistry>()
-            .insert_resource(Time::<Fixed>::from_hz(60.0))
+            .init_resource::<crate::game::net::NetRole>()
+            .insert_resource(Time::<Fixed>::from_hz(crate::game::net::proto::TICK_HZ))
             .insert_resource(TimestepMode::Fixed {
-                dt: 1.0 / 60.0,
+                dt: 1.0 / crate::game::net::proto::TICK_HZ as f32,
                 substeps: 1,
             })
             .add_plugins((
                 RapierPhysicsPlugin::<NoUserData>::default().in_fixed_schedule(),
-                RapierDebugRenderPlugin::default().disabled(),
-                crate::game::debug::DebugPlugin,
                 MapSystemPlugin,
                 level::LevelPlugin,
                 player::PlayerPlugin,
                 crate::game::matchplay::MatchPlugin,
                 crate::game::weapons::WeaponPlugin,
                 crate::game::bots::BotPlugin,
-                window::WindowSettingsPlugin,
-                ui::UiPlugin,
             ))
             .configure_sets(
                 FixedUpdate,
@@ -103,6 +101,30 @@ impl Plugin for GamePlugin {
             .add_systems(OnEnter(GameState::Paused), pause_physics)
             .add_systems(OnEnter(GameState::Finished), pause_physics)
             .add_systems(OnEnter(GameState::Playing), pause_physics);
+    }
+}
+
+/// The playable client: core simulation plus window, menus, HUD, hub access and netcode.
+pub struct GamePlugin;
+impl Plugin for GamePlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins((
+            CorePlugin,
+            RapierDebugRenderPlugin::default().disabled(),
+            crate::game::debug::DebugPlugin,
+            window::WindowSettingsPlugin,
+            crate::game::hub::HubPlugin,
+            crate::game::net::client::NetClientPlugin,
+            ui::UiPlugin,
+        ));
+    }
+}
+
+/// The dedicated match server: core simulation driven by remote inputs, no presentation.
+pub struct ServerPlugin;
+impl Plugin for ServerPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins((CorePlugin, crate::game::net::server::NetServerPlugin));
     }
 }
 

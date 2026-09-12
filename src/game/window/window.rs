@@ -17,7 +17,7 @@ fn init_window(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
         window.title = "Open Strike".into();
         window.resolution = WindowResolution::new(1920., 1080.);
         window.mode = WindowMode::BorderlessFullscreen(MonitorSelection::Current);
-        if std::env::var_os("CSRS_CAPTURE").is_some()
+        if (std::env::var_os("CSRS_CAPTURE").is_some() || std::env::var_os("CSRS_WINDOWED").is_some())
             && std::env::var_os("CSRS_FULLSCREEN").is_none()
         {
             window.mode = WindowMode::Windowed;

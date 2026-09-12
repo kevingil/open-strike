@@ -3,7 +3,7 @@ use super::{
     text,
 };
 use crate::game::{
-    config::{GameConfig, GameMode},
+    config::GameConfig,
     matchplay::Combatant,
     player::player::LocalPlayer,
 };
@@ -48,7 +48,7 @@ pub fn update(
     children: Query<&Children>,
     practice: Query<Entity, With<PracticeCounts>>,
 ) {
-    let tdm = config.mode == GameMode::TeamDeathmatch;
+    let tdm = config.mode.scored();
     for entity in &practice {
         if let Ok(mut node) = nodes.get_mut(entity) {
             node.display = if tdm { Display::None } else { Display::Flex };

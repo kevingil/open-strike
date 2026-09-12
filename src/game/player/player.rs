@@ -47,7 +47,10 @@ impl Plugin for PlayerPlugin {
             )
             .add_systems(
                 OnEnter(GameState::Playing),
-                init_player.run_if(|q: Query<(), With<LocalPlayer>>| q.is_empty()),
+                init_player.run_if(
+                    (|q: Query<(), With<LocalPlayer>>| q.is_empty())
+                        .and(crate::game::net::role_is(crate::game::net::NetRole::Local)),
+                ),
             )
             .add_systems(OnEnter(GameState::MainMenu), cleanup_player)
             .add_systems(OnEnter(GameState::Loading), cleanup_player)
@@ -67,6 +70,237 @@ impl Plugin for PlayerPlugin {
             );
     }
 }
+/// Who drives an actor and which cosmetic/presentation pieces it needs.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ActorKind {
+    /// The local human: camera, viewmodel, keyboard and mouse.
+    LocalHuman,
+    /// Server-side AI.
+    Bot,
+    /// A connected player simulated on the server from its reported inputs.
+    Remote,
+    /// A client-side mirror of an actor the server owns.
+    Puppet,
+}
+
+pub struct ActorSpawn<'a> {
+    pub slot: usize,
+    pub team: Team,
+    pub kind: ActorKind,
+    pub name: Option<String>,
+    /// Feet position and yaw in radians; taken from the map's spawn points when None.
+    pub placement: Option<(Vec3, f32)>,
+    pub melee_weapon: crate::game::config::WeaponId,
+    pub skin: SkinId,
+    pub map: &'a crate::game::map::MapConfig,
+    /// Spawn the visible character; the dedicated server has nothing to draw.
+    pub cosmetic: bool,
+}
+
+/// Spawns a logical body, its cosmetic model and hit zones. Returns the body.
+pub fn spawn_actor(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    gltfs: &Assets<Gltf>,
+    settings: &PlayerSettings,
+    spawn: ActorSpawn,
+) -> Entity {
+    let map = spawn.map;
+    let team = spawn.team;
+    let slot = spawn.slot;
+    let (feet, yaw) = spawn.placement.unwrap_or_else(|| {
+        let point = map
+            .spawn_points
+            .iter()
+            .filter(|s| s.team.is_none() || s.team == Some(team))
+            .nth(slot % 3)
+            .or_else(|| {
+                map.spawn_points
+                    .iter()
+                    .find(|s| s.team.is_none() || s.team == Some(team))
+            })
+            .or_else(|| map.spawn_points.first())
+            .expect("Validated spawn");
+        (
+            map.transform
+                .to_transform()
+                .transform_point(point.position.to_vec3()),
+            point.rotation.to_radians(),
+        )
+    });
+    let center = feet + Vec3::Y * (BODY_HEIGHT * 0.5 + 0.03);
+    let local = spawn.kind == ActorKind::LocalHuman;
+    // Server-owned mirrors and remote players are placed, not integrated.
+    let body_type = if matches!(spawn.kind, ActorKind::Remote | ActorKind::Puppet) {
+        RigidBody::KinematicPositionBased
+    } else {
+        RigidBody::Dynamic
+    };
+    let mut combatant = match spawn.name {
+        Some(name) => Combatant::named(team, slot, name),
+        None => Combatant::new(team, slot),
+    };
+    if spawn.kind == ActorKind::Bot && combatant.name == "YOU" {
+        combatant.name = crate::game::matchplay::BOT_NAMES[0].into();
+    }
+    let body = commands
+        .spawn((
+            PlayerEntity,
+            LogicalPlayer,
+            Transform::from_translation(center),
+            Visibility::default(),
+            Collider::cylinder(BODY_HEIGHT * 0.5, BODY_RADIUS),
+            body_type,
+            Velocity::zero(),
+            LockedAxes::ROTATION_LOCKED,
+            GravityScale(0.0),
+            Sleeping::disabled(),
+            Ccd { enabled: true },
+            Friction {
+                coefficient: 0.0,
+                combine_rule: CoefficientCombineRule::Min,
+            },
+            Restitution {
+                coefficient: 0.0,
+                combine_rule: CoefficientCombineRule::Min,
+            },
+        ))
+        .insert((
+            combatant,
+            super::presentation::PoseHistory::new(center, yaw),
+            ActorIntent::default(),
+            crate::game::weapons::WeaponState {
+                melee_weapon: spawn.melee_weapon,
+                previous: spawn.melee_weapon,
+                ..default()
+            },
+            crate::game::weapons::audio::AudioState::default(),
+            FpsControllerInput {
+                yaw,
+                ..default()
+            },
+            FpsController {
+                enable_input: false,
+                radius: BODY_RADIUS,
+                height: BODY_HEIGHT,
+                upright_height: BODY_HEIGHT,
+                crouch_height: 1.4,
+                walk_speed: 4.5,
+                run_speed: 6.2,
+                crouched_speed: 2.3,
+                jump_speed: 6.0,
+                gravity: 19.6,
+                step_offset: 0.48,
+                sensitivity: settings.sensitivity * 0.001,
+                yaw,
+                ..default()
+            },
+            CameraConfig {
+                height_offset: -0.15,
+            },
+        ))
+        .id();
+    match spawn.kind {
+        ActorKind::LocalHuman => {
+            commands.entity(body).insert(LocalPlayer);
+            if std::env::var_os("CSRS_BOT_PLAYER").is_some() {
+                commands
+                    .entity(body)
+                    .insert(crate::game::bots::BotController::new(0));
+            }
+        }
+        ActorKind::Bot => {
+            commands
+                .entity(body)
+                .insert(crate::game::bots::BotController::new(slot));
+        }
+        ActorKind::Remote | ActorKind::Puppet => {}
+    }
+    if spawn.cosmetic {
+        let gltf = gltfs.get(&assets.skins[team.index()]).unwrap();
+        commands.spawn((
+            PlayerEntity,
+            PlayerModel {
+                logical_entity: body,
+                is_local_player: local,
+            },
+            CharacterRig(spawn.skin),
+            PlayerAnimationController::default(),
+            SceneRoot(gltf.scenes[0].clone()),
+            Transform::from_translation(feet),
+            Visibility::Inherited,
+        ));
+    }
+    for (kind, zone) in [
+        (HitboxZoneType::Head, &STANDARD_HITBOX.head),
+        (HitboxZoneType::Torso, &STANDARD_HITBOX.torso),
+        (HitboxZoneType::Legs, &STANDARD_HITBOX.legs),
+    ] {
+        commands.spawn((
+            Collider::cuboid(
+                zone.half_extents.x,
+                zone.half_extents.y,
+                zone.half_extents.z,
+            ),
+            Sensor,
+            Transform::from_translation(zone.offset - Vec3::Y * (BODY_HEIGHT * 0.5)),
+            HitboxZoneMarker {
+                zone_type: kind,
+                player_entity: body,
+            },
+            ChildOf(body),
+        ));
+    }
+    if local {
+        let (exposure, bloom, tonemapping, fog) = create_camera_components(map);
+        let mut camera = commands.spawn((
+            PlayerEntity,
+            WorldCamera,
+            SpatialListener::new(0.2),
+            Camera3d::default(),
+            Camera {
+                hdr: true,
+                ..default()
+            },
+            Projection::Perspective(PerspectiveProjection {
+                fov: 2.0 * ((settings.fov.to_radians() * 0.5).tan() / (16.0 / 9.0)).atan(),
+                near: 0.05,
+                ..default()
+            }),
+            RenderPlayer {
+                logical_entity: body,
+            },
+            Transform::default(),
+            exposure,
+            bloom,
+            tonemapping,
+        ));
+        if let Some(fog) = fog {
+            camera.insert(fog);
+        }
+        let camera = camera.id();
+        if std::env::var_os("CSRS_NO_VIEWMODEL").is_none() {
+            crate::game::weapons::viewmodel::spawn(
+                commands,
+                assets,
+                gltfs,
+                body,
+                camera,
+                spawn.skin,
+            );
+        }
+    }
+    body
+}
+
+pub fn team_skin(team: Team) -> SkinId {
+    if team == Team::Attacker {
+        SkinId::Soldier
+    } else {
+        SkinId::Police
+    }
+}
+
 fn init_player(
     mut commands: Commands,
     assets: Res<GameAssets>,
@@ -85,182 +319,57 @@ fn init_player(
     } else {
         Team::Attacker
     };
-    let count = if config.mode == GameMode::TeamDeathmatch {
-        6
-    } else {
-        1
+    let count = match config.mode {
+        GameMode::TeamDeathmatch => 6,
+        GameMode::Deathmatch => 8,
+        GameMode::Freemode => 1,
     };
     for slot in 0..count {
-        let team = if slot < 3 {
+        let team = if config.mode == GameMode::Deathmatch {
+            if slot % 2 == 0 {
+                human_team
+            } else if human_team == Team::Attacker {
+                Team::Defender
+            } else {
+                Team::Attacker
+            }
+        } else if slot < 3 {
             human_team
         } else if human_team == Team::Attacker {
             Team::Defender
         } else {
             Team::Attacker
         };
-        let spawn = map
-            .spawn_points
-            .iter()
-            .filter(|s| s.team.is_none() || s.team == Some(team))
-            .nth(slot % 3)
-            .or_else(|| {
-                map.spawn_points
-                    .iter()
-                    .find(|s| s.team.is_none() || s.team == Some(team))
-            })
-            .expect("Validated team spawn");
-        let feet = map
-            .transform
-            .to_transform()
-            .transform_point(spawn.position.to_vec3());
-        let skin = if team == Team::Attacker {
-            SkinId::Soldier
-        } else {
-            SkinId::Police
-        };
-        let body = commands
-            .spawn((
-                PlayerEntity,
-                LogicalPlayer,
-                Transform::from_translation(feet + Vec3::Y * (BODY_HEIGHT * 0.5 + 0.03)),
-                Visibility::default(),
-                Collider::cylinder(BODY_HEIGHT * 0.5, BODY_RADIUS),
-                RigidBody::Dynamic,
-                Velocity::zero(),
-                LockedAxes::ROTATION_LOCKED,
-                GravityScale(0.0),
-                Sleeping::disabled(),
-                Ccd { enabled: true },
-                Friction {
-                    coefficient: 0.0,
-                    combine_rule: CoefficientCombineRule::Min,
+        let placement = (config.mode == GameMode::Deathmatch).then(|| {
+            let point = &map.spawn_points[slot % map.spawn_points.len()];
+            (
+                map.transform
+                    .to_transform()
+                    .transform_point(point.position.to_vec3()),
+                point.rotation.to_radians(),
+            )
+        });
+        spawn_actor(
+            &mut commands,
+            &assets,
+            &gltfs,
+            &settings,
+            ActorSpawn {
+                slot,
+                team,
+                kind: if slot == 0 {
+                    ActorKind::LocalHuman
+                } else {
+                    ActorKind::Bot
                 },
-                Restitution {
-                    coefficient: 0.0,
-                    combine_rule: CoefficientCombineRule::Min,
-                },
-            ))
-            .insert((
-                Combatant::new(team, slot),
-                super::presentation::PoseHistory::new(
-                    feet + Vec3::Y * (BODY_HEIGHT * 0.5 + 0.03),
-                    spawn.rotation.to_radians(),
-                ),
-                ActorIntent::default(),
-                crate::game::weapons::WeaponState {
-                    melee_weapon: loadout.melee_weapon,
-                    previous: loadout.melee_weapon,
-                    ..default()
-                },
-                crate::game::weapons::audio::AudioState::default(),
-                FpsControllerInput {
-                    yaw: spawn.rotation.to_radians(),
-                    ..default()
-                },
-                FpsController {
-                    enable_input: false,
-                    radius: BODY_RADIUS,
-                    height: BODY_HEIGHT,
-                    upright_height: BODY_HEIGHT,
-                    crouch_height: 1.4,
-                    walk_speed: 4.5,
-                    run_speed: 6.2,
-                    crouched_speed: 2.3,
-                    jump_speed: 6.0,
-                    gravity: 19.6,
-                    step_offset: 0.48,
-                    sensitivity: settings.sensitivity * 0.001,
-                    ..default()
-                },
-                CameraConfig {
-                    height_offset: -0.15,
-                },
-            ))
-            .id();
-        if slot == 0 {
-            commands.entity(body).insert(LocalPlayer);
-            if std::env::var_os("CSRS_BOT_PLAYER").is_some() {
-                commands
-                    .entity(body)
-                    .insert(crate::game::bots::BotController::new(0));
-            }
-        } else {
-            commands
-                .entity(body)
-                .insert(crate::game::bots::BotController::new(slot));
-        }
-        let gltf = gltfs.get(&assets.skins[team.index()]).unwrap();
-        commands.spawn((
-            PlayerEntity,
-            PlayerModel {
-                logical_entity: body,
-                is_local_player: slot == 0,
+                name: None,
+                placement,
+                melee_weapon: loadout.melee_weapon,
+                skin: team_skin(team),
+                map,
+                cosmetic: true,
             },
-            CharacterRig(skin),
-            PlayerAnimationController::default(),
-            SceneRoot(gltf.scenes[0].clone()),
-            Transform::from_translation(feet),
-            Visibility::Inherited,
-        ));
-        for (kind, zone) in [
-            (HitboxZoneType::Head, &STANDARD_HITBOX.head),
-            (HitboxZoneType::Torso, &STANDARD_HITBOX.torso),
-            (HitboxZoneType::Legs, &STANDARD_HITBOX.legs),
-        ] {
-            commands.spawn((
-                Collider::cuboid(
-                    zone.half_extents.x,
-                    zone.half_extents.y,
-                    zone.half_extents.z,
-                ),
-                Sensor,
-                Transform::from_translation(zone.offset - Vec3::Y * (BODY_HEIGHT * 0.5)),
-                HitboxZoneMarker {
-                    zone_type: kind,
-                    player_entity: body,
-                },
-                ChildOf(body),
-            ));
-        }
-        if slot == 0 {
-            let (exposure, bloom, tonemapping, fog) = create_camera_components(map);
-            let mut camera = commands.spawn((
-                PlayerEntity,
-                WorldCamera,
-                SpatialListener::new(0.2),
-                Camera3d::default(),
-                Camera {
-                    hdr: true,
-                    ..default()
-                },
-                Projection::Perspective(PerspectiveProjection {
-                    fov: 2.0 * ((settings.fov.to_radians() * 0.5).tan() / (16.0 / 9.0)).atan(),
-                    near: 0.05,
-                    ..default()
-                }),
-                RenderPlayer {
-                    logical_entity: body,
-                },
-                Transform::default(),
-                exposure,
-                bloom,
-                tonemapping,
-            ));
-            if let Some(fog) = fog {
-                camera.insert(fog);
-            }
-            let camera = camera.id();
-            if std::env::var_os("CSRS_NO_VIEWMODEL").is_none() {
-                crate::game::weapons::viewmodel::spawn(
-                    &mut commands,
-                    &assets,
-                    &gltfs,
-                    body,
-                    camera,
-                    loadout.selected_skin,
-                );
-            }
-        }
+        );
     }
 }
 fn cleanup_player(mut commands: Commands, query: Query<Entity, With<PlayerEntity>>) {

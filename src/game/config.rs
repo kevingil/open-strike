@@ -32,25 +32,70 @@ pub enum BotDifficulty {
 }
 
 /// Available game modes
-#[derive(Default, Clone, PartialEq, Debug)]
+#[derive(Default, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum GameMode {
     Freemode,
+    Deathmatch,
     #[default]
     TeamDeathmatch,
-    // Future: GridShot, Tracking, Deathmatch, etc.
 }
 
 impl GameMode {
     pub fn name(&self) -> &'static str {
         match self {
             GameMode::Freemode => "Freemode",
+            GameMode::Deathmatch => "Deathmatch",
             GameMode::TeamDeathmatch => "Team Deathmatch",
+        }
+    }
+
+    /// Whether actors are grouped into two sides; free-for-all treats everyone as hostile.
+    pub fn teams(&self) -> bool {
+        matches!(self, GameMode::TeamDeathmatch)
+    }
+
+    /// Whether the match keeps score and ends on time or score limits.
+    pub fn scored(&self) -> bool {
+        matches!(self, GameMode::Deathmatch | GameMode::TeamDeathmatch)
+    }
+
+    /// Short identifier used by the hub and the server command line.
+    pub fn key(&self) -> &'static str {
+        match self {
+            GameMode::Freemode => "free",
+            GameMode::Deathmatch => "dm",
+            GameMode::TeamDeathmatch => "tdm",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "free" => Some(GameMode::Freemode),
+            "dm" => Some(GameMode::Deathmatch),
+            "tdm" => Some(GameMode::TeamDeathmatch),
+            _ => None,
+        }
+    }
+
+    pub fn code(&self) -> u8 {
+        match self {
+            GameMode::Freemode => 0,
+            GameMode::Deathmatch => 1,
+            GameMode::TeamDeathmatch => 2,
+        }
+    }
+
+    pub fn from_code(code: u8) -> Self {
+        match code {
+            1 => GameMode::Deathmatch,
+            2 => GameMode::TeamDeathmatch,
+            _ => GameMode::Freemode,
         }
     }
 }
 
 /// Available maps
-#[derive(Default, Clone, PartialEq, Debug)]
+#[derive(Default, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum MapId {
     Warehouse,
     #[default]
@@ -62,6 +107,36 @@ impl MapId {
         match self {
             MapId::Warehouse => "Warehouse",
             MapId::Dust2 => "Dust 2",
+        }
+    }
+
+    pub fn key(&self) -> &'static str {
+        match self {
+            MapId::Warehouse => "warehouse",
+            MapId::Dust2 => "dust2",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "warehouse" => Some(MapId::Warehouse),
+            "dust2" => Some(MapId::Dust2),
+            _ => None,
+        }
+    }
+
+    pub fn code(&self) -> u8 {
+        match self {
+            MapId::Warehouse => 0,
+            MapId::Dust2 => 1,
+        }
+    }
+
+    pub fn from_code(code: u8) -> Self {
+        if code == 0 {
+            MapId::Warehouse
+        } else {
+            MapId::Dust2
         }
     }
 

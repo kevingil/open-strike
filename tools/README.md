@@ -117,6 +117,40 @@ Private packs must not be added to Git, release bundles or public demos without
 appropriate permission. `.gitignore` prevents ordinary accidental additions but
 does not remove previously committed files from history or prevent `git add -f`.
 
+## Online play
+
+Online matches use three processes: `strike-hub` (accounts, friends, presence and the match
+server registry), `strike-server` (a headless match running the same simulation as the client)
+and the game client. Everything is configured from the client; there is no web dashboard.
+
+```sh
+# Hub: SQLite file, plain HTTP, spawns a match server per game when STRIKE_SERVER_BIN is set.
+STRIKE_HUB_DB=hub.db STRIKE_HUB_LISTEN=0.0.0.0:7777 STRIKE_SERVER_KEY=change-me \
+STRIKE_SERVER_BIN=target/debug/strike-server STRIKE_SERVER_HOST=<public ip> \
+cargo run --locked --bin strike-hub
+
+# Client: point it at the hub, then sign in or create an account from the sidebar.
+STRIKE_HUB_URL=http://<hub ip>:7777 cargo run --locked --bin open-strike
+```
+
+The first account registered on an empty hub becomes its administrator. Accounts have a
+username, an email (for recovery) and an argon2-hashed password; login accepts either the
+username or the email. The sidebar searches players by username, sends and accepts friend
+requests, shows presence, and joins a friend's match. When the hub is unreachable the
+sidebar shows a red badge and disables social controls; local play is unaffected.
+
+`strike-server --hub <url> --port <udp port> --mode dm|tdm --map dust2 --bots 6 --max-players 12`
+runs a standalone match; without `--hub` it accepts any join ticket as a display name for
+LAN testing. It needs a GPU adapter for Bevy's render plugin (software Vulkan such as
+lavapipe is enough) but loads no textures or character models. Admin endpoints under
+`/v1/admin/*` (accounts, roles, bans, settings, audit log) accept the admin's session token;
+`strike-hub bootstrap-admin <username>` promotes an account from the shell.
+
+`CSRS_ONLINE_SCENARIO=host|friend` with `CSRS_USER`, `CSRS_FRIEND`, `CSRS_ONLINE_MODE` and
+`CSRS_CAPTURE_DIR` drives a full walkthrough (register or sign in, befriend, find or join a
+match, capture screenshots) through the same handlers the menus use. `CSRS_WINDOWED=1` opens
+a `CSRS_WIDTH`×`CSRS_HEIGHT` window instead of fullscreen.
+
 ## Native diagnostics
 
 These opt-in environment flags exercise the real application without operating the desktop:

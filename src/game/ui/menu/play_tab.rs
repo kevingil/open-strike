@@ -5,7 +5,8 @@ use super::{
     LocalMatchOption, MenuPage, MenuTab,
 };
 use crate::game::{
-    config::{GameConfig, MapId},
+    config::{GameConfig, GameMode, MapId},
+    hub::{HubClient, HubForms, HubHealth, HubSession},
     GameState,
 };
 use bevy::prelude::*;
@@ -18,6 +19,10 @@ struct MapCard;
 struct MatchDetails;
 #[derive(Resource, Default)]
 struct StartPending(bool);
+#[derive(Component)]
+struct OnlineModeButton(GameMode);
+#[derive(Component)]
+struct OnlineStatus;
 impl Plugin for PlayTabPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<StartPending>()
@@ -29,7 +34,7 @@ impl Plugin for PlayTabPlugin {
             )
             .add_systems(
                 Update,
-                (interact, details, start_button::animate)
+                (interact, details, start_button::animate, online_buttons, online_status)
                     .run_if(in_state(GameState::MainMenu).and(in_state(MenuTab::Play))),
             );
     }
@@ -73,7 +78,37 @@ fn setup(
                         BackgroundColor(GLASS_SELECTED),
                         BorderColor(ACCENT),
                     ))
-                    .with_child(label(LocalMatchOption::LABEL.to_uppercase(), 17., ACCENT));
+                    .with_child(label(
+                        format!("LOCAL · {}", LocalMatchOption::LABEL.to_uppercase()),
+                        17.,
+                        ACCENT,
+                    ));
+                for (mode, text) in [
+                    (GameMode::Deathmatch, "ONLINE · DEATHMATCH"),
+                    (GameMode::TeamDeathmatch, "ONLINE · TEAM DEATHMATCH"),
+                ] {
+                    modes
+                        .spawn((
+                            OnlineModeButton(mode),
+                            Button,
+                            Node {
+                                padding: UiRect::axes(Val::Px(20.), Val::Px(9.)),
+                                margin: UiRect::left(Val::Px(12.)),
+                                ..button()
+                            },
+                            BackgroundColor(Color::srgba(1., 1., 1., 0.04)),
+                            BorderColor(Color::NONE),
+                        ))
+                        .with_child(label(text, 17., MUTED));
+                }
+                modes.spawn((
+                    OnlineStatus,
+                    label("", 12., MUTED),
+                    Node {
+                        margin: UiRect::left(Val::Px(18.)),
+                        ..default()
+                    },
+                ));
             });
             root.spawn(Node {
                 display: Display::Grid,
@@ -228,5 +263,63 @@ fn interact(
     {
         pending.0 = true;
         next.set(GameState::Loading);
+    }
+}
+
+fn online_buttons(
+    client: Option<ResMut<HubClient>>,
+    session: Res<HubSession>,
+    health: Res<HubHealth>,
+    mut forms: ResMut<HubForms>,
+    buttons: Query<(&Interaction, &OnlineModeButton), Changed<Interaction>>,
+) {
+    let Some(mut client) = client else { return };
+    for (interaction, button) in &buttons {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        if !session.logged_in() || !health.online || forms.busy {
+            continue;
+        }
+        forms.busy = true;
+        forms.error = None;
+        forms.version += 1;
+        client.find_match(button.0.clone());
+    }
+}
+fn online_status(
+    session: Res<HubSession>,
+    health: Res<HubHealth>,
+    forms: Res<HubForms>,
+    mut status: Query<&mut Text, With<OnlineStatus>>,
+    mut buttons: Query<(&OnlineModeButton, &Children, &mut BackgroundColor)>,
+    mut labels: Query<&mut TextColor>,
+) {
+    let ready = session.logged_in() && health.online && !forms.busy;
+    let message = if matches!(*session, HubSession::NoHub) {
+        "Set a hub address to play online".to_string()
+    } else if !health.online {
+        "HUB OFFLINE".to_string()
+    } else if forms.busy {
+        "Finding a match…".to_string()
+    } else if !session.logged_in() {
+        "Sign in from the sidebar to play online".to_string()
+    } else if let Some(error) = &forms.error {
+        error.clone()
+    } else {
+        String::new()
+    };
+    for mut text in &mut status {
+        if **text != message {
+            **text = message.clone();
+        }
+    }
+    for (_, children, mut background) in &mut buttons {
+        *background = BackgroundColor(Color::srgba(1., 1., 1., if ready { 0.08 } else { 0.03 }));
+        for child in children.iter() {
+            if let Ok(mut color) = labels.get_mut(child) {
+                *color = TextColor(if ready { WHITE } else { MUTED.with_alpha(0.5) });
+            }
+        }
     }
 }
