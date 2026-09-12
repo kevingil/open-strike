@@ -138,19 +138,11 @@ pub enum NetEvent {
 }
 
 pub fn weapon_code(id: WeaponId) -> u8 {
-    match id {
-        WeaponId::AK47 => 0,
-        WeaponId::DefaultKnife => 1,
-        WeaponId::ReferenceKnife => 2,
-    }
+    id.code()
 }
 
 pub fn weapon_from_code(code: u8) -> WeaponId {
-    match code {
-        1 => WeaponId::DefaultKnife,
-        2 => WeaponId::ReferenceKnife,
-        _ => WeaponId::AK47,
-    }
+    WeaponId::from_code(code)
 }
 
 pub fn encode<T: Serialize>(message: &T) -> Vec<u8> {
