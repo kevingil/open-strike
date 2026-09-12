@@ -1,0 +1,15 @@
+.git
+.cursor
+.plans
+target
+hub.db
+hub.db-*
+**/hub.db
+**/hub.db-*
+docs
+tools
+**/*.blend
+assets/audio/csgo
+assets/audio/local
+assets/models
+**/.DS_Store
