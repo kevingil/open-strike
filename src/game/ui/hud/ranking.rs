@@ -2,11 +2,7 @@ use super::{
     assets::{team_color, HudArt},
     text,
 };
-use crate::game::{
-    config::GameConfig,
-    matchplay::Combatant,
-    player::player::LocalPlayer,
-};
+use crate::game::{config::GameConfig, matchplay::Combatant, player::player::LocalPlayer};
 use bevy::prelude::*;
 
 #[derive(Component)]
