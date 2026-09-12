@@ -68,7 +68,7 @@ pub fn bind_muzzles(
         })
         .clone();
     for (root, model) in &models {
-        if model.weapon_id != WeaponId::AK47 {
+        if model.weapon_id.is_knife() {
             commands.entity(root).insert(FlashBound);
             continue;
         }
@@ -107,7 +107,7 @@ pub fn animate_flashes(
 
 /// Framing is independent of world FOV and hit-query origins.
 fn profile(id: WeaponId) -> Transform {
-    if id.is_knife() {
+    if id.is_knife() && id.has_viewmodel() {
         // Native reference centimetres, viewed from (0, 10, 32) in Blender.
         let tilt = Quat::from_rotation_x((13.0_f32 / 40.0).atan());
         Transform {
@@ -115,7 +115,12 @@ fn profile(id: WeaponId) -> Transform {
             rotation: tilt * Quat::from_rotation_y(std::f32::consts::PI),
             scale: Vec3::splat(0.01),
         }
-    } else {
+    } else if id.is_knife() {
+        Transform::from_xyz(0.16, -0.18, -0.32).with_rotation(
+            Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
+                * Quat::from_rotation_y(std::f32::consts::PI),
+        )
+    } else if id.has_viewmodel() {
         // The AKM reference rig is authored in source units around its camera.
         Transform::from_xyz(-0.005, -0.05, 0.0)
             .with_rotation(
@@ -123,6 +128,12 @@ fn profile(id: WeaponId) -> Transform {
                     * Quat::from_rotation_y(std::f32::consts::PI),
             )
             .with_scale(Vec3::splat(0.025))
+    } else {
+        // Catalog guns are exported in meters with the barrel on +Y.
+        Transform::from_xyz(0.18, -0.16, -0.38).with_rotation(
+            Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
+                * Quat::from_rotation_y(std::f32::consts::PI),
+        )
     }
 }
 
@@ -144,6 +155,7 @@ pub fn spawn(
             WeaponId::AK47 => &assets.arms[skin_index],
             WeaponId::DefaultKnife => &assets.knife_view[skin_index],
             WeaponId::ReferenceKnife => &assets.reference_knife_view[skin_index],
+            other => assets.world(other),
         };
         let framing = profile(weapon_id);
         roots.push(
@@ -247,23 +259,27 @@ pub fn bind_scenes(
         };
         for entity in descendants.iter_descendants(character) {
             if names.get(entity).is_ok_and(|n| n.as_str() == socket) {
-                for weapon_id in WeaponId::all() {
-                    if showcase.is_some() && weapon_id.is_knife() {
-                        continue;
-                    }
-                    let handle = if weapon_id == WeaponId::AK47 {
-                        &assets.gun
-                    } else if weapon_id == WeaponId::ReferenceKnife {
-                        &assets.reference_knife_world
-                    } else {
-                        &assets.knife_world
-                    };
+                // The menu pose is authored for the AK. Other catalog assets
+                // must not delay or prevent its attachment.
+                let wanted = WeaponId::ALL
+                    .into_iter()
+                    .filter(|weapon_id| showcase.is_none() || *weapon_id == WeaponId::AK47);
+                if wanted.clone().any(|weapon_id| gltfs.get(assets.world(weapon_id)).is_none())
+                {
+                    break;
+                }
+                for weapon_id in wanted {
+                    let handle = assets.world(weapon_id);
                     let Some(asset) = gltfs.get(handle) else {
                         continue;
                     };
                     commands.entity(entity).with_child((
                         SceneRoot(asset.scenes[0].clone()),
-                        Transform::from_scale(Vec3::splat(100.0)),
+                        Transform::from_scale(Vec3::splat(if weapon_id.has_viewmodel() {
+                            100.0
+                        } else {
+                            1.0
+                        })),
                         ViewModel {
                             actor: model.map(|m| m.logical_entity).unwrap_or(character),
                             weapon_id,
@@ -279,7 +295,7 @@ pub fn bind_scenes(
                             reload_duration: 0.0,
                             slash_duration: 0.0,
                         },
-                        if weapon_id == WeaponId::AK47 {
+                        if showcase.is_some() {
                             Visibility::Inherited
                         } else {
                             Visibility::Hidden
@@ -308,13 +324,20 @@ pub fn bind_scenes(
         }
         let handle = match (model.weapon_id, model.first_person) {
             (WeaponId::AK47, true) => &assets.arms[model.skin_index],
-            (WeaponId::AK47, false) => &assets.gun,
-            (WeaponId::DefaultKnife, _) => &assets.knife_view[model.skin_index],
-            (WeaponId::ReferenceKnife, _) => &assets.reference_knife_view[model.skin_index],
+            (WeaponId::DefaultKnife, true) => &assets.knife_view[model.skin_index],
+            (WeaponId::ReferenceKnife, true) => &assets.reference_knife_view[model.skin_index],
+            (id, _) => assets.world(id),
         };
         let Some(gltf) = gltfs.get(handle) else {
             continue;
         };
+        if !model.weapon_id.has_viewmodel() {
+            commands.entity(root).insert((
+                RenderLayers::layer(if model.first_person { 1 } else { 0 }),
+                LayersBound,
+            ));
+            continue;
+        }
         let names = if model.weapon_id == WeaponId::AK47 {
             ["idle_rifle", "fire_rifle", "reload_rifle"]
         } else {
@@ -395,8 +418,8 @@ pub fn animate_viewmodel(
             continue;
         };
         let visible = actor.alive() && weapon.active == model.weapon_id;
-        if model.first_person && model.weapon_id == WeaponId::AK47 {
-            *transform = profile(WeaponId::AK47);
+        if model.first_person && !model.weapon_id.is_knife() {
+            *transform = profile(model.weapon_id);
             transform.translation.y -=
                 0.22 * (weapon.equip_remaining / KNIFE.equip_seconds).clamp(0.0, 1.0);
         }
@@ -458,7 +481,7 @@ pub fn animate_viewmodel(
                 std::time::Duration::from_secs_f32(0.08),
             );
             active.replay();
-            active.set_speed(model.reload_duration / super::AK47.reload_seconds);
+            active.set_speed(model.reload_duration / weapon.active.stats().reload_seconds);
         } else if !reloading && model.last_shot < weapon.shots {
             transitions
                 .play(&mut player, model.nodes[1], std::time::Duration::ZERO)
@@ -505,12 +528,14 @@ pub fn frame_camera(
         if let Ok(weapon) = weapons.get(owner.0) {
             // The rifle's glove seams and receiver need a camera-local key;
             // world sunlight belongs to layer 0 and cannot light these meshes.
-            light.intensity = if weapon.active == WeaponId::AK47 {
+            light.intensity = if weapon.active.is_knife() {
+                1000.0
+            } else if weapon.active.has_viewmodel() {
                 70_000.0
             } else {
-                1000.0
+                8_000.0
             };
-            light.radius = if weapon.active == WeaponId::AK47 {
+            light.radius = if weapon.active.has_viewmodel() && !weapon.active.is_knife() {
                 0.25
             } else {
                 0.0
