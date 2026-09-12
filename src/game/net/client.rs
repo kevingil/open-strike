@@ -273,6 +273,11 @@ fn spawn_local(
             name: Some(net.name.clone()),
             placement: Some((welcome.position, welcome.yaw)),
             melee_weapon: loadout.melee_weapon,
+            primary_weapon: loadout.spawn_gun(if welcome.team == crate::game::matchplay::Team::Defender {
+                crate::game::player::skins::PlayerSide::Defender
+            } else {
+                crate::game::player::skins::PlayerSide::Attacker
+            }),
             skin: team_skin(welcome.team),
             map,
             cosmetic: true,
@@ -325,8 +330,12 @@ fn apply_snapshot(
         return;
     }
     net.dirty = false;
-    let Some(snapshot) = net.latest.clone() else { return };
-    let Some(map) = map.config.as_ref() else { return };
+    let Some(snapshot) = net.latest.clone() else {
+        return;
+    };
+    let Some(map) = map.config.as_ref() else {
+        return;
+    };
     let mine = net.my_net_id();
     session.elapsed = snapshot.elapsed;
     session.score = snapshot.score;
@@ -334,8 +343,15 @@ fn apply_snapshot(
     for state in &snapshot.actors {
         seen.push(state.net_id);
         if state.net_id == mine {
-            let Ok((entity, mut actor, mut transform, mut velocity, mut input, mut controller, mut weapon)) =
-                local.single_mut()
+            let Ok((
+                entity,
+                mut actor,
+                mut transform,
+                mut velocity,
+                mut input,
+                mut controller,
+                mut weapon,
+            )) = local.single_mut()
             else {
                 continue;
             };
@@ -355,11 +371,7 @@ fn apply_snapshot(
                 input.pitch = 0.0;
                 controller.height = BODY_HEIGHT;
                 controller.ground_tick = 0;
-                *weapon = WeaponState {
-                    melee_weapon: weapon.melee_weapon,
-                    previous: weapon.melee_weapon,
-                    ..default()
-                };
+                *weapon = WeaponState::armed(weapon.gun, weapon.melee_weapon);
                 commands.entity(entity).remove::<ColliderDisabled>();
             } else if was_alive && !actor.alive() {
                 commands.entity(entity).insert(ColliderDisabled);
@@ -381,8 +393,12 @@ fn apply_snapshot(
                         team: state.team,
                         kind: ActorKind::Puppet,
                         name: Some(state.name.clone()),
-                        placement: Some((state.position - Vec3::Y * (BODY_HEIGHT * 0.5 + 0.03), state.yaw)),
+                        placement: Some((
+                            state.position - Vec3::Y * (BODY_HEIGHT * 0.5 + 0.03),
+                            state.yaw,
+                        )),
                         melee_weapon: crate::game::config::WeaponId::DefaultKnife,
+                        primary_weapon: crate::game::config::WeaponId::AK47,
                         skin: team_skin(state.team),
                         map,
                         cosmetic: true,
@@ -406,7 +422,8 @@ fn apply_snapshot(
                 continue;
             }
         };
-        let Ok((entity, mut puppet, mut actor, mut weapon, mut transform)) = puppets.get_mut(entity)
+        let Ok((entity, mut puppet, mut actor, mut weapon, mut transform)) =
+            puppets.get_mut(entity)
         else {
             continue;
         };
@@ -635,11 +652,15 @@ fn watch_timeout(
 ) {
     let now = time.elapsed_secs_f64();
     let timed_out = match state.get() {
-        GameState::Playing => net.welcomed() && now - net.last_snapshot_at > CLIENT_TIMEOUT_SECS as f64,
+        GameState::Playing => {
+            net.welcomed() && now - net.last_snapshot_at > CLIENT_TIMEOUT_SECS as f64
+        }
         GameState::Loading => {
             !net.welcomed()
                 && net.rejected().is_none()
-                && net.connect_started.is_some_and(|started| now - started > 45.0)
+                && net
+                    .connect_started
+                    .is_some_and(|started| now - started > 45.0)
         }
         _ => false,
     };
