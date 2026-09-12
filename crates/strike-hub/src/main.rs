@@ -224,15 +224,24 @@ fn authenticate(hub: &Hub, headers: &HeaderMap) -> Result<Account, HubError> {
         )
         .unwrap_or(None);
     if banned.is_some_and(|until| until > now()) {
-        return Err(err(StatusCode::FORBIDDEN, "banned", "This account is banned"));
+        return Err(err(
+            StatusCode::FORBIDDEN,
+            "banned",
+            "This account is banned",
+        ));
     }
     db.execute(
         "UPDATE sessions SET last_seen_at = ?1 WHERE token = ?2",
         params![now(), bearer],
     )
     .ok();
-    load_account(&db, account_id, true)
-        .ok_or_else(|| err(StatusCode::UNAUTHORIZED, "session_expired", "Account missing"))
+    load_account(&db, account_id, true).ok_or_else(|| {
+        err(
+            StatusCode::UNAUTHORIZED,
+            "session_expired",
+            "Account missing",
+        )
+    })
 }
 
 fn require_role(account: &Account, roles: &[&str]) -> Result<(), HubError> {
@@ -306,7 +315,13 @@ fn validate_password(password: &str, username: &str) -> Result<(), HubError> {
     Ok(())
 }
 
-fn session_response(db: &Connection, hub: &Hub, account_id: i64, device: &str, first_admin: bool) -> Value {
+fn session_response(
+    db: &Connection,
+    hub: &Hub,
+    account_id: i64,
+    device: &str,
+    first_admin: bool,
+) -> Value {
     let token = token();
     db.execute(
         "INSERT INTO sessions (token, account_id, device_label, created_at, last_seen_at, expires_at)
@@ -335,16 +350,29 @@ fn session_response(db: &Connection, hub: &Hub, account_id: i64, device: &str, f
     })
 }
 
-async fn register(State(hub): State<Hub>, Json(body): Json<RegisterBody>) -> Result<Json<Value>, HubError> {
+async fn register(
+    State(hub): State<Hub>,
+    Json(body): Json<RegisterBody>,
+) -> Result<Json<Value>, HubError> {
     validate_username(&body.username)?;
     let email = body.email.trim().to_lowercase();
     if !email.contains('@') || email.len() < 5 {
-        return Err(err(StatusCode::BAD_REQUEST, "invalid_email", "Enter a valid email"));
+        return Err(err(
+            StatusCode::BAD_REQUEST,
+            "invalid_email",
+            "Enter a valid email",
+        ));
     }
     validate_password(&body.password, &body.username)?;
     let hash = Argon2::default()
         .hash_password(body.password.as_bytes(), &SaltString::generate(&mut OsRng))
-        .map_err(|_| err(StatusCode::INTERNAL_SERVER_ERROR, "internal", "Hashing failed"))?
+        .map_err(|_| {
+            err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal",
+                "Hashing failed",
+            )
+        })?
         .to_string();
     let db = hub.db.lock().unwrap();
     let count: i64 = db
@@ -352,14 +380,26 @@ async fn register(State(hub): State<Hub>, Json(body): Json<RegisterBody>) -> Res
         .unwrap();
     let role = if count == 0 { "admin" } else { "player" };
     if account_by_username(&db, &body.username).is_some() {
-        return Err(err(StatusCode::CONFLICT, "username_taken", "That username is taken"));
+        return Err(err(
+            StatusCode::CONFLICT,
+            "username_taken",
+            "That username is taken",
+        ));
     }
     let email_taken: Option<i64> = db
-        .query_row("SELECT id FROM accounts WHERE email = ?1", params![email], |r| r.get(0))
+        .query_row(
+            "SELECT id FROM accounts WHERE email = ?1",
+            params![email],
+            |r| r.get(0),
+        )
         .optional()
         .unwrap();
     if email_taken.is_some() {
-        return Err(err(StatusCode::CONFLICT, "email_taken", "That email already has an account"));
+        return Err(err(
+            StatusCode::CONFLICT,
+            "email_taken",
+            "That email already has an account",
+        ));
     }
     db.execute(
         "INSERT INTO accounts (username, username_lower, email, display_name, password_hash, role, created_at)
@@ -368,9 +408,22 @@ async fn register(State(hub): State<Hub>, Json(body): Json<RegisterBody>) -> Res
     )
     .unwrap();
     let id = db.last_insert_rowid();
-    db.execute("INSERT INTO stats (account_id) VALUES (?1)", params![id]).ok();
-    audit(&db, Some(id), "register", &body.username, json!({ "role": role }));
-    Ok(Json(session_response(&db, &hub, id, &body.device_label, role == "admin")))
+    db.execute("INSERT INTO stats (account_id) VALUES (?1)", params![id])
+        .ok();
+    audit(
+        &db,
+        Some(id),
+        "register",
+        &body.username,
+        json!({ "role": role }),
+    );
+    Ok(Json(session_response(
+        &db,
+        &hub,
+        id,
+        &body.device_label,
+        role == "admin",
+    )))
 }
 
 #[derive(Deserialize)]
@@ -381,7 +434,10 @@ struct LoginBody {
     device_label: String,
 }
 
-async fn login(State(hub): State<Hub>, Json(body): Json<LoginBody>) -> Result<Json<Value>, HubError> {
+async fn login(
+    State(hub): State<Hub>,
+    Json(body): Json<LoginBody>,
+) -> Result<Json<Value>, HubError> {
     let db = hub.db.lock().unwrap();
     let ident = body.identifier.trim();
     let row: Option<(i64, String, Option<i64>, Option<String>)> = if ident.contains('@') {
@@ -404,30 +460,49 @@ async fn login(State(hub): State<Hub>, Json(body): Json<LoginBody>) -> Result<Js
     let (id, hash, banned, reason) = row.unwrap_or((0, dummy.to_string(), None, None));
     let parsed = PasswordHash::new(&hash).ok();
     let valid = parsed
-        .map(|h| Argon2::default().verify_password(body.password.as_bytes(), &h).is_ok())
+        .map(|h| {
+            Argon2::default()
+                .verify_password(body.password.as_bytes(), &h)
+                .is_ok()
+        })
         .unwrap_or(false);
     if id == 0 || !valid {
-        return Err(err(StatusCode::UNAUTHORIZED, "invalid_credentials", "Wrong username, email or password"));
+        return Err(err(
+            StatusCode::UNAUTHORIZED,
+            "invalid_credentials",
+            "Wrong username, email or password",
+        ));
     }
     if banned.is_some_and(|until| until > now()) {
         return Err((
             StatusCode::FORBIDDEN,
-            Json(json!({ "error": "banned", "message": reason.unwrap_or_else(|| "Banned".into()), "until": banned })),
+            Json(
+                json!({ "error": "banned", "message": reason.unwrap_or_else(|| "Banned".into()), "until": banned }),
+            ),
         ));
     }
-    Ok(Json(session_response(&db, &hub, id, &body.device_label, false)))
+    Ok(Json(session_response(
+        &db,
+        &hub,
+        id,
+        &body.device_label,
+        false,
+    )))
 }
 
 async fn me(State(hub): State<Hub>, headers: HeaderMap) -> Result<Json<Value>, HubError> {
     let account = authenticate(&hub, &headers)?;
-    Ok(Json(json!({ "account": account, "hub": { "name": hub.name } })))
+    Ok(Json(
+        json!({ "account": account, "hub": { "name": hub.name } }),
+    ))
 }
 
 async fn logout(State(hub): State<Hub>, headers: HeaderMap) -> Result<Json<Value>, HubError> {
     let account = authenticate(&hub, &headers)?;
     let token = headers["authorization"].to_str().unwrap()[7..].to_string();
     let db = hub.db.lock().unwrap();
-    db.execute("DELETE FROM sessions WHERE token = ?1", params![token]).ok();
+    db.execute("DELETE FROM sessions WHERE token = ?1", params![token])
+        .ok();
     db.execute(
         "UPDATE presence SET state = 'offline', server_id = NULL, updated_at = ?1 WHERE account_id = ?2",
         params![now(), account.id],
@@ -541,13 +616,21 @@ async fn friends_list(State(hub): State<Hub>, headers: HeaderMap) -> Result<Json
     let mut pending_in = Vec::new();
     let mut pending_out = Vec::new();
     for row in stmt
-        .query_map(params![me.id], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?)))
+        .query_map(params![me.id], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        })
         .unwrap()
         .flatten()
     {
         let (req, addr, state) = row;
         let other = if req == me.id { addr } else { req };
-        let Some(acc) = load_account(&db, other, false) else { continue };
+        let Some(acc) = load_account(&db, other, false) else {
+            continue;
+        };
         let entry = json!({ "username": acc.username, "display_name": acc.display_name, "presence": presence_of(&db, other) });
         if state == "accepted" {
             friends.push(entry);
@@ -557,7 +640,9 @@ async fn friends_list(State(hub): State<Hub>, headers: HeaderMap) -> Result<Json
             pending_in.push(entry);
         }
     }
-    Ok(Json(json!({ "friends": friends, "pending_in": pending_in, "pending_out": pending_out })))
+    Ok(Json(
+        json!({ "friends": friends, "pending_in": pending_in, "pending_out": pending_out }),
+    ))
 }
 
 #[derive(Deserialize)]
@@ -565,7 +650,11 @@ struct FriendBody {
     username: String,
 }
 
-async fn friends_request(State(hub): State<Hub>, headers: HeaderMap, Json(body): Json<FriendBody>) -> Result<Json<Value>, HubError> {
+async fn friends_request(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Json(body): Json<FriendBody>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     let db = hub.db.lock().unwrap();
     let other = account_by_username(&db, &body.username)
@@ -595,7 +684,11 @@ async fn friends_request(State(hub): State<Hub>, headers: HeaderMap, Json(body):
     }
 }
 
-async fn friends_accept(State(hub): State<Hub>, headers: HeaderMap, Json(body): Json<FriendBody>) -> Result<Json<Value>, HubError> {
+async fn friends_accept(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Json(body): Json<FriendBody>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     let db = hub.db.lock().unwrap();
     let other = account_by_username(&db, &body.username)
@@ -608,12 +701,20 @@ async fn friends_accept(State(hub): State<Hub>, headers: HeaderMap, Json(body): 
         )
         .unwrap();
     if changed == 0 {
-        return Err(err(StatusCode::NOT_FOUND, "not_found", "No pending request from that player"));
+        return Err(err(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "No pending request from that player",
+        ));
     }
     Ok(Json(json!({ "relationship": "friends" })))
 }
 
-async fn friends_decline(State(hub): State<Hub>, headers: HeaderMap, Json(body): Json<FriendBody>) -> Result<Json<Value>, HubError> {
+async fn friends_decline(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Json(body): Json<FriendBody>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     let db = hub.db.lock().unwrap();
     let other = account_by_username(&db, &body.username)
@@ -626,7 +727,11 @@ async fn friends_decline(State(hub): State<Hub>, headers: HeaderMap, Json(body):
     Ok(Json(json!({ "relationship": "none" })))
 }
 
-async fn friends_remove(State(hub): State<Hub>, headers: HeaderMap, Path(username): Path<String>) -> Result<Json<Value>, HubError> {
+async fn friends_remove(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Path(username): Path<String>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     let db = hub.db.lock().unwrap();
     let other = account_by_username(&db, &username)
@@ -644,7 +749,11 @@ struct PresenceBody {
     state: String,
 }
 
-async fn presence(State(hub): State<Hub>, headers: HeaderMap, Json(body): Json<PresenceBody>) -> Result<Json<Value>, HubError> {
+async fn presence(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Json(body): Json<PresenceBody>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     let db = hub.db.lock().unwrap();
     // A match server's heartbeat owns in_match; the client only reports menu states.
@@ -671,7 +780,10 @@ struct RegisterServerBody {
     max_players: u32,
 }
 
-async fn server_register(State(hub): State<Hub>, Json(body): Json<RegisterServerBody>) -> Result<Json<Value>, HubError> {
+async fn server_register(
+    State(hub): State<Hub>,
+    Json(body): Json<RegisterServerBody>,
+) -> Result<Json<Value>, HubError> {
     require_server_key(&hub, &body.key)?;
     let db = hub.db.lock().unwrap();
     db.execute(
@@ -691,7 +803,11 @@ struct HeartbeatBody {
     players: Vec<i64>,
 }
 
-async fn server_heartbeat(State(hub): State<Hub>, Path(id): Path<String>, Json(body): Json<HeartbeatBody>) -> Result<Json<Value>, HubError> {
+async fn server_heartbeat(
+    State(hub): State<Hub>,
+    Path(id): Path<String>,
+    Json(body): Json<HeartbeatBody>,
+) -> Result<Json<Value>, HubError> {
     require_server_key(&hub, &body.key)?;
     let db = hub.db.lock().unwrap();
     db.execute(
@@ -721,7 +837,11 @@ struct VerifyBody {
     ticket: String,
 }
 
-async fn server_verify_ticket(State(hub): State<Hub>, Path(id): Path<String>, Json(body): Json<VerifyBody>) -> Result<Json<Value>, HubError> {
+async fn server_verify_ticket(
+    State(hub): State<Hub>,
+    Path(id): Path<String>,
+    Json(body): Json<VerifyBody>,
+) -> Result<Json<Value>, HubError> {
     require_server_key(&hub, &body.key)?;
     let db = hub.db.lock().unwrap();
     let row: Option<(i64, i64, Option<i64>)> = db
@@ -736,9 +856,17 @@ async fn server_verify_ticket(State(hub): State<Hub>, Path(id): Path<String>, Js
         return Err(err(StatusCode::NOT_FOUND, "not_found", "Unknown ticket"));
     };
     if consumed.is_some() || expires < now() {
-        return Err(err(StatusCode::GONE, "code_expired", "Ticket already used or expired"));
+        return Err(err(
+            StatusCode::GONE,
+            "code_expired",
+            "Ticket already used or expired",
+        ));
     }
-    db.execute("UPDATE tickets SET consumed_at = ?1 WHERE ticket = ?2", params![now(), body.ticket]).ok();
+    db.execute(
+        "UPDATE tickets SET consumed_at = ?1 WHERE ticket = ?2",
+        params![now(), body.ticket],
+    )
+    .ok();
     let account = load_account(&db, account_id, false).unwrap();
     Ok(Json(json!({ "account": account })))
 }
@@ -757,7 +885,11 @@ struct ReportEntry {
     won: bool,
 }
 
-async fn server_report(State(hub): State<Hub>, Path(id): Path<String>, Json(body): Json<ReportBody>) -> Result<Json<Value>, HubError> {
+async fn server_report(
+    State(hub): State<Hub>,
+    Path(id): Path<String>,
+    Json(body): Json<ReportBody>,
+) -> Result<Json<Value>, HubError> {
     require_server_key(&hub, &body.key)?;
     let db = hub.db.lock().unwrap();
     for entry in &body.results {
@@ -768,7 +900,13 @@ async fn server_report(State(hub): State<Hub>, Path(id): Path<String>, Json(body
         )
         .ok();
     }
-    audit(&db, None, "match_report", &id, json!({ "players": body.results.len() }));
+    audit(
+        &db,
+        None,
+        "match_report",
+        &id,
+        json!({ "players": body.results.len() }),
+    );
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -798,7 +936,12 @@ fn issue_ticket(db: &Connection, account: i64, server: &Value) -> Value {
     let ticket = token();
     db.execute(
         "INSERT INTO tickets (ticket, account_id, server_id, expires_at) VALUES (?1, ?2, ?3, ?4)",
-        params![ticket, account, server["server_id"].as_str().unwrap(), now() + TICKET_TTL],
+        params![
+            ticket,
+            account,
+            server["server_id"].as_str().unwrap(),
+            now() + TICKET_TTL
+        ],
     )
     .unwrap();
     json!({ "server": server, "ticket": ticket })
@@ -811,9 +954,26 @@ struct FindBody {
     map: Option<String>,
 }
 
+fn workspace_dir() -> std::path::PathBuf {
+    let mut dir = std::env::current_dir().unwrap_or_else(|_| ".".into());
+    for _ in 0..8 {
+        if dir.join("assets").join("maps").is_dir() {
+            return dir;
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    std::path::PathBuf::from(".")
+}
+
 async fn spawn_server(hub: &Hub, mode: &str, map: &str) -> Result<Value, HubError> {
     let Some(bin) = hub.server_bin.clone() else {
-        return Err(err(StatusCode::SERVICE_UNAVAILABLE, "no_servers", "No match server is running and the hub cannot start one"));
+        return Err(err(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "no_servers",
+            "No match server is running and the hub cannot start one",
+        ));
     };
     let port = {
         let mut next = hub.ports.lock().unwrap();
@@ -824,32 +984,63 @@ async fn spawn_server(hub: &Hub, mode: &str, map: &str) -> Result<Value, HubErro
     let server_id = format!("srv-{}-{}", port, &token()[..6]);
     let child = tokio::process::Command::new(&bin)
         .args([
-            "--hub", &hub.hub_url, "--server-id", &server_id, "--port", &port.to_string(),
-            "--mode", mode, "--map", map, "--advertise", &hub.server_host,
+            "--hub",
+            &hub.hub_url,
+            "--server-id",
+            &server_id,
+            "--port",
+            &port.to_string(),
+            "--mode",
+            mode,
+            "--map",
+            map,
+            "--advertise",
+            &hub.server_host,
         ])
+        .current_dir(workspace_dir())
         .env("STRIKE_SERVER_KEY", &hub.server_key)
+        .env_remove("CARGO_MANIFEST_DIR")
         .kill_on_drop(true)
         .spawn()
-        .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, "spawn_failed", format!("Could not start match server: {e}")))?;
+        .map_err(|e| {
+            err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "spawn_failed",
+                format!("Could not start match server: {e}"),
+            )
+        })?;
     hub.children.lock().unwrap().push(child);
     println!("hub: spawned {server_id} on port {port} ({mode} on {map})");
     for _ in 0..600 {
         tokio::time::sleep(Duration::from_millis(250)).await;
         let db = hub.db.lock().unwrap();
-        if let Some(row) = server_rows(&db).into_iter().find(|s| s["server_id"] == server_id) {
+        if let Some(row) = server_rows(&db)
+            .into_iter()
+            .find(|s| s["server_id"] == server_id)
+        {
             return Ok(row);
         }
     }
-    Err(err(StatusCode::GATEWAY_TIMEOUT, "spawn_timeout", "Match server did not start in time"))
+    Err(err(
+        StatusCode::GATEWAY_TIMEOUT,
+        "spawn_timeout",
+        "Match server did not start in time",
+    ))
 }
 
-async fn match_find(State(hub): State<Hub>, headers: HeaderMap, Json(body): Json<FindBody>) -> Result<Json<Value>, HubError> {
+async fn match_find(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Json(body): Json<FindBody>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     let map = body.map.unwrap_or_else(|| "dust2".into());
     let existing = {
         let db = hub.db.lock().unwrap();
         server_rows(&db).into_iter().find(|s| {
-            s["mode"] == body.mode && s["players"].as_i64() < s["max_players"].as_i64() && s["phase"] != "finished"
+            s["mode"] == body.mode
+                && s["players"].as_i64() < s["max_players"].as_i64()
+                && s["phase"] != "finished"
         })
     };
     let server = match existing {
@@ -865,13 +1056,23 @@ struct JoinBody {
     server_id: String,
 }
 
-async fn match_join(State(hub): State<Hub>, headers: HeaderMap, Json(body): Json<JoinBody>) -> Result<Json<Value>, HubError> {
+async fn match_join(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Json(body): Json<JoinBody>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     let db = hub.db.lock().unwrap();
     let server = server_rows(&db)
         .into_iter()
         .find(|s| s["server_id"] == body.server_id)
-        .ok_or_else(|| err(StatusCode::NOT_FOUND, "not_found", "That match is no longer running"))?;
+        .ok_or_else(|| {
+            err(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                "That match is no longer running",
+            )
+        })?;
     if server["players"].as_i64() >= server["max_players"].as_i64() {
         return Err(err(StatusCode::CONFLICT, "full", "That match is full"));
     }
@@ -880,11 +1081,18 @@ async fn match_join(State(hub): State<Hub>, headers: HeaderMap, Json(body): Json
 
 // ---------------------------------------------------------------- admin
 
-async fn admin_accounts(State(hub): State<Hub>, headers: HeaderMap, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, HubError> {
+async fn admin_accounts(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Query(q): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     require_role(&me, &["admin", "moderator"])?;
     let db = hub.db.lock().unwrap();
-    let like = format!("%{}%", q.get("q").cloned().unwrap_or_default().to_lowercase());
+    let like = format!(
+        "%{}%",
+        q.get("q").cloned().unwrap_or_default().to_lowercase()
+    );
     let mut stmt = db
         .prepare("SELECT id, username, email, role, banned_until, ban_reason, created_at FROM accounts WHERE username_lower LIKE ?1 ORDER BY id LIMIT 50")
         .unwrap();
@@ -907,20 +1115,51 @@ struct RoleBody {
     role: String,
 }
 
-async fn admin_role(State(hub): State<Hub>, headers: HeaderMap, Path(id): Path<i64>, Json(body): Json<RoleBody>) -> Result<Json<Value>, HubError> {
+async fn admin_role(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<RoleBody>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     require_role(&me, &["admin"])?;
     if !["player", "moderator", "admin"].contains(&body.role.as_str()) {
         return Err(err(StatusCode::BAD_REQUEST, "invalid", "Unknown role"));
     }
     let db = hub.db.lock().unwrap();
-    let admins: i64 = db.query_row("SELECT COUNT(*) FROM accounts WHERE role = 'admin'", [], |r| r.get(0)).unwrap();
-    let current: String = db.query_row("SELECT role FROM accounts WHERE id = ?1", params![id], |r| r.get(0)).unwrap_or_default();
+    let admins: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM accounts WHERE role = 'admin'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let current: String = db
+        .query_row(
+            "SELECT role FROM accounts WHERE id = ?1",
+            params![id],
+            |r| r.get(0),
+        )
+        .unwrap_or_default();
     if current == "admin" && body.role != "admin" && admins <= 1 {
-        return Err(err(StatusCode::CONFLICT, "last_admin", "Cannot demote the last admin"));
+        return Err(err(
+            StatusCode::CONFLICT,
+            "last_admin",
+            "Cannot demote the last admin",
+        ));
     }
-    db.execute("UPDATE accounts SET role = ?1 WHERE id = ?2", params![body.role, id]).unwrap();
-    audit(&db, Some(me.id), "set_role", &id.to_string(), json!({ "role": body.role }));
+    db.execute(
+        "UPDATE accounts SET role = ?1 WHERE id = ?2",
+        params![body.role, id],
+    )
+    .unwrap();
+    audit(
+        &db,
+        Some(me.id),
+        "set_role",
+        &id.to_string(),
+        json!({ "role": body.role }),
+    );
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -932,31 +1171,60 @@ struct BanBody {
     reason: String,
 }
 
-async fn admin_ban(State(hub): State<Hub>, headers: HeaderMap, Path(id): Path<i64>, Json(body): Json<BanBody>) -> Result<Json<Value>, HubError> {
+async fn admin_ban(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<BanBody>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     require_role(&me, &["admin", "moderator"])?;
     let until = now() + body.hours.unwrap_or(24 * 365 * 100) * 3600;
     let db = hub.db.lock().unwrap();
-    db.execute("UPDATE accounts SET banned_until = ?1, ban_reason = ?2 WHERE id = ?3", params![until, body.reason, id]).unwrap();
-    db.execute("DELETE FROM sessions WHERE account_id = ?1", params![id]).ok();
-    audit(&db, Some(me.id), "ban", &id.to_string(), json!({ "until": until, "reason": body.reason }));
+    db.execute(
+        "UPDATE accounts SET banned_until = ?1, ban_reason = ?2 WHERE id = ?3",
+        params![until, body.reason, id],
+    )
+    .unwrap();
+    db.execute("DELETE FROM sessions WHERE account_id = ?1", params![id])
+        .ok();
+    audit(
+        &db,
+        Some(me.id),
+        "ban",
+        &id.to_string(),
+        json!({ "until": until, "reason": body.reason }),
+    );
     Ok(Json(json!({ "ok": true, "until": until })))
 }
 
-async fn admin_unban(State(hub): State<Hub>, headers: HeaderMap, Path(id): Path<i64>) -> Result<Json<Value>, HubError> {
+async fn admin_unban(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     require_role(&me, &["admin", "moderator"])?;
     let db = hub.db.lock().unwrap();
-    db.execute("UPDATE accounts SET banned_until = NULL, ban_reason = NULL WHERE id = ?1", params![id]).unwrap();
+    db.execute(
+        "UPDATE accounts SET banned_until = NULL, ban_reason = NULL WHERE id = ?1",
+        params![id],
+    )
+    .unwrap();
     audit(&db, Some(me.id), "unban", &id.to_string(), json!({}));
     Ok(Json(json!({ "ok": true })))
 }
 
-async fn admin_settings_get(State(hub): State<Hub>, headers: HeaderMap) -> Result<Json<Value>, HubError> {
+async fn admin_settings_get(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     require_role(&me, &["admin", "moderator"])?;
     let db = hub.db.lock().unwrap();
-    let mut stmt = db.prepare("SELECT key, value FROM settings ORDER BY key").unwrap();
+    let mut stmt = db
+        .prepare("SELECT key, value FROM settings ORDER BY key")
+        .unwrap();
     let map: serde_json::Map<String, Value> = stmt
         .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
         .unwrap()
@@ -972,7 +1240,11 @@ struct SettingBody {
     value: String,
 }
 
-async fn admin_settings_put(State(hub): State<Hub>, headers: HeaderMap, Json(body): Json<SettingBody>) -> Result<Json<Value>, HubError> {
+async fn admin_settings_put(
+    State(hub): State<Hub>,
+    headers: HeaderMap,
+    Json(body): Json<SettingBody>,
+) -> Result<Json<Value>, HubError> {
     let me = authenticate(&hub, &headers)?;
     require_role(&me, &["admin"])?;
     let db = hub.db.lock().unwrap();
@@ -982,7 +1254,13 @@ async fn admin_settings_put(State(hub): State<Hub>, headers: HeaderMap, Json(bod
         params![body.key, body.value, me.id, now()],
     )
     .unwrap();
-    audit(&db, Some(me.id), "set_setting", &body.key, json!({ "value": body.value }));
+    audit(
+        &db,
+        Some(me.id),
+        "set_setting",
+        &body.key,
+        json!({ "value": body.value }),
+    );
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -1012,28 +1290,46 @@ async fn main() {
     let db = Connection::open(&database).expect("open database");
     migrate(&db);
     if args.get(1).map(String::as_str) == Some("bootstrap-admin") {
-        let user = args.get(2).expect("usage: strike-hub bootstrap-admin <username>");
+        let user = args
+            .get(2)
+            .expect("usage: strike-hub bootstrap-admin <username>");
         let changed = db
-            .execute("UPDATE accounts SET role = 'admin' WHERE username_lower = ?1", params![user.to_lowercase()])
+            .execute(
+                "UPDATE accounts SET role = 'admin' WHERE username_lower = ?1",
+                params![user.to_lowercase()],
+            )
             .unwrap();
-        println!("{}", if changed == 1 { "promoted" } else { "no such account" });
+        println!(
+            "{}",
+            if changed == 1 {
+                "promoted"
+            } else {
+                "no such account"
+            }
+        );
         return;
     }
     let listen = std::env::var("STRIKE_HUB_LISTEN").unwrap_or_else(|_| "0.0.0.0:7777".into());
-    let hub_url = std::env::var("STRIKE_HUB_URL").unwrap_or_else(|_| format!("http://127.0.0.1:{}", listen.rsplit(':').next().unwrap()));
+    let hub_url = std::env::var("STRIKE_HUB_URL")
+        .unwrap_or_else(|_| format!("http://127.0.0.1:{}", listen.rsplit(':').next().unwrap()));
     let hub = Hub {
         db: Arc::new(Mutex::new(db)),
         name: std::env::var("STRIKE_HUB_NAME").unwrap_or_else(|_| "Open Strike Hub".into()),
         server_key: std::env::var("STRIKE_SERVER_KEY").unwrap_or_else(|_| {
             let key = token();
-            println!("hub: generated STRIKE_SERVER_KEY={key} (set it to run match servers separately)");
+            println!(
+                "hub: generated STRIKE_SERVER_KEY={key} (set it to run match servers separately)"
+            );
             key
         }),
         server_bin: std::env::var("STRIKE_SERVER_BIN").ok(),
         server_host: std::env::var("STRIKE_SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".into()),
         hub_url,
         ports: Arc::new(Mutex::new(
-            std::env::var("STRIKE_SERVER_PORT_START").ok().and_then(|p| p.parse().ok()).unwrap_or(27015),
+            std::env::var("STRIKE_SERVER_PORT_START")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(27015),
         )),
         children: Arc::new(Mutex::new(Vec::new())),
     };
@@ -1061,11 +1357,17 @@ async fn main() {
         .route("/v1/admin/accounts/{id}/role", post(admin_role))
         .route("/v1/admin/accounts/{id}/ban", post(admin_ban))
         .route("/v1/admin/accounts/{id}/unban", post(admin_unban))
-        .route("/v1/admin/settings", get(admin_settings_get).put(admin_settings_put))
+        .route(
+            "/v1/admin/settings",
+            get(admin_settings_get).put(admin_settings_put),
+        )
         .route("/v1/admin/audit", get(admin_audit))
         .fallback(fallback)
         .with_state(hub.clone());
-    println!("hub: {} listening on {listen}, database {database}", hub.name);
+    println!(
+        "hub: {} listening on {listen}, database {database}",
+        hub.name
+    );
     let listener = tokio::net::TcpListener::bind(&listen).await.expect("bind");
     axum::serve(listener, app).await.unwrap();
 }
