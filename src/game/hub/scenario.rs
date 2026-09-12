@@ -135,7 +135,11 @@ fn drive(
 ) {
     let now = time.elapsed_secs_f64();
     if now > scenario.exit_after {
-        info!("ONLINE_SCENARIO exit after {} s with {} captures", scenario.exit_after, scenario.captures.len());
+        info!(
+            "ONLINE_SCENARIO exit after {} s with {} captures",
+            scenario.exit_after,
+            scenario.captures.len()
+        );
         exit.write(AppExit::Success);
         return;
     }
@@ -163,7 +167,11 @@ fn drive(
             // Show the filled-in form once, then submit through the hub client.
             if now - scenario.step_at > 1.5 && !scenario.captures.contains(&"sidebar-register") {
                 shot(&mut commands, &mut scenario, "sidebar-register");
-                let (user, email, pass) = (scenario.user.clone(), scenario.email.clone(), scenario.pass.clone());
+                let (user, email, pass) = (
+                    scenario.user.clone(),
+                    scenario.email.clone(),
+                    scenario.pass.clone(),
+                );
                 forms.busy = true;
                 forms.version += 1;
                 client.register(&user, &email, &pass);

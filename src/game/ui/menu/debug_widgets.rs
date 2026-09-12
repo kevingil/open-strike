@@ -45,7 +45,10 @@ impl<T: Component + Clone> ButtonWidget<T> {
             ))
             .with_child((
                 Text::new(self.label),
-                TextFont { font_size: 12.0, ..default() },
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
                 TextColor(Color::WHITE),
             ))
             .id()
@@ -136,9 +139,15 @@ impl<T: Component + Clone> DebugWidget for AdjustRowWidget<T> {
         let label_entity = commands
             .spawn((
                 Text::new(self.label),
-                TextFont { font_size: 11.0, ..default() },
+                TextFont {
+                    font_size: 11.0,
+                    ..default()
+                },
                 TextColor(Color::srgb(0.8, 0.8, 0.8)),
-                Node { width: Val::Px(self.label_width), ..default() },
+                Node {
+                    width: Val::Px(self.label_width),
+                    ..default()
+                },
             ))
             .id();
         commands.entity(row).add_child(label_entity);
@@ -162,13 +171,21 @@ pub struct ToggleWidget<T: Component + Clone> {
 
 impl<T: Component + Clone> ToggleWidget<T> {
     pub fn new(label: &'static str, action: T, initial_state: bool) -> Self {
-        Self { label, action, initial_state }
+        Self {
+            label,
+            action,
+            initial_state,
+        }
     }
 }
 
 impl<T: Component + Clone> DebugWidget for ToggleWidget<T> {
     fn spawn(self, commands: &mut Commands, parent: Entity) {
-        let bg_color = if self.initial_state { BTN_ACTIVE } else { BTN_NORMAL };
+        let bg_color = if self.initial_state {
+            BTN_ACTIVE
+        } else {
+            BTN_NORMAL
+        };
         let btn = commands
             .spawn((
                 self.action,
@@ -184,7 +201,10 @@ impl<T: Component + Clone> DebugWidget for ToggleWidget<T> {
             ))
             .with_child((
                 Text::new(self.label),
-                TextFont { font_size: 12.0, ..default() },
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
                 TextColor(Color::WHITE),
             ))
             .id();
@@ -214,7 +234,10 @@ impl<T: Component + Clone> DebugWidget for DisplayWidget<T> {
             .spawn((
                 self.marker,
                 Text::new(&self.initial_text),
-                TextFont { font_size: 11.0, ..default() },
+                TextFont {
+                    font_size: 11.0,
+                    ..default()
+                },
                 TextColor(Color::WHITE),
             ))
             .id();

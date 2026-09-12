@@ -30,7 +30,9 @@ fn profile_labels(
                 health.hub_name.to_uppercase()
             },
         ),
-        HubSession::Offline(Some(account)) => (account.username.to_uppercase(), "HUB OFFLINE".into()),
+        HubSession::Offline(Some(account)) => {
+            (account.username.to_uppercase(), "HUB OFFLINE".into())
+        }
         _ => ("LOCAL PLAYER".into(), "DUST 2".into()),
     };
     for mut text in &mut names {
