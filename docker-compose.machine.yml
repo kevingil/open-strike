@@ -1,0 +1,31 @@
+# Single-machine stack: hub TCP 7777 + match UDP 27015 in one container.
+# Local two-service compose stays in docker-compose.yml.
+services:
+  stack:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: stack
+    ports:
+      - "7777:7777"
+      - "27015:27015/udp"
+    environment:
+      STRIKE_HUB_DB: /data/hub.db
+      STRIKE_HUB_LISTEN: 0.0.0.0:7777
+      STRIKE_HUB_URL: http://127.0.0.1:7777
+      STRIKE_HUB_NAME: ${STRIKE_HUB_NAME:-Open Strike Hub}
+      STRIKE_SERVER_KEY: ${STRIKE_SERVER_KEY:-dev}
+      STRIKE_SERVER_HOST: ${STRIKE_SERVER_HOST:-127.0.0.1}
+      STRIKE_SERVER_BIND: ${STRIKE_SERVER_BIND:-0.0.0.0}
+      STRIKE_SERVER_PORT: ${STRIKE_SERVER_PORT:-27015}
+      STRIKE_SERVER_MODE: ${STRIKE_SERVER_MODE:-tdm}
+      STRIKE_SERVER_MAP: ${STRIKE_SERVER_MAP:-dust2}
+      STRIKE_SERVER_BOTS: ${STRIKE_SERVER_BOTS:-6}
+      XDG_RUNTIME_DIR: /tmp
+    volumes:
+      - hub-data:/data
+    restart: unless-stopped
+    init: true
+
+volumes:
+  hub-data:

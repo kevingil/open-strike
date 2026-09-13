@@ -1,0 +1,61 @@
+# One Fly Machine: hub HTTP on TCP 7777, match server on UDP 27015.
+# Allocate a dedicated IPv4, then set STRIKE_SERVER_HOST to that address:
+#   fly ips allocate-v4
+#   fly secrets set STRIKE_SERVER_KEY=change-me STRIKE_SERVER_HOST=<dedicated-ipv4>
+# Clients: STRIKE_HUB_URL=http://<dedicated-ipv4>:7777
+
+app = "open-strike"
+primary_region = "iad"
+
+[build]
+  dockerfile = "docker/Dockerfile"
+  build-target = "stack"
+
+[env]
+  STRIKE_HUB_DB = "/data/hub.db"
+  STRIKE_HUB_LISTEN = "0.0.0.0:7777"
+  STRIKE_HUB_URL = "http://127.0.0.1:7777"
+  STRIKE_HUB_NAME = "Open Strike Hub"
+  STRIKE_SERVER_BIND = "fly-global-services"
+  STRIKE_SERVER_PORT = "27015"
+  STRIKE_SERVER_MODE = "tdm"
+  STRIKE_SERVER_MAP = "dust2"
+  STRIKE_SERVER_BOTS = "6"
+  WGPU_BACKEND = "vulkan"
+  WGPU_POWER_PREF = "low"
+  XDG_RUNTIME_DIR = "/tmp"
+
+[mounts]
+  source = "hub_data"
+  destination = "/data"
+
+[[services]]
+  internal_port = 7777
+  protocol = "tcp"
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 7777
+
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/v1/health"
+
+[[services]]
+  internal_port = 27015
+  protocol = "udp"
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 27015
+
+[[vm]]
+  memory = "4gb"
+  cpus = 2

@@ -1,3 +1,4 @@
+# Two-container local layout. One-machine hub+server: docker-compose.machine.yml
 services:
   hub:
     build:

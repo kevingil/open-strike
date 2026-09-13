@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Local-dev images for strike-hub and the headless match server.
+# Images for strike-hub, the headless match server, and the one-machine stack.
 # The playable client stays on the host (it needs a native GPU window).
 
 FROM rust:bookworm AS toolchain
@@ -63,3 +63,35 @@ ENV STRIKE_SERVER_KEY=dev \
     WGPU_POWER_PREF=low
 EXPOSE 27015/udp
 CMD ["./strike-server", "--hub", "http://hub:7777", "--port", "27015", "--advertise", "127.0.0.1", "--mode", "tdm", "--map", "dust2", "--bots", "6"]
+
+# Single VM / Fly image: both listeners in one process tree.
+FROM debian:bookworm-slim AS stack
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl libasound2 libvulkan1 mesa-vulkan-drivers \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=hub-build /out/strike-hub /app/strike-hub
+COPY --from=server-build /out/ /app/
+COPY assets/generated /app/assets/generated
+COPY assets/maps /app/assets/maps
+COPY assets/audio/generated /app/assets/audio/generated
+COPY assets/config /app/assets/config
+COPY assets/fonts /app/assets/fonts
+COPY docker/entrypoint-stack.sh /app/entrypoint-stack.sh
+RUN chmod +x /app/entrypoint-stack.sh
+ENV STRIKE_HUB_DB=/data/hub.db \
+    STRIKE_HUB_LISTEN=0.0.0.0:7777 \
+    STRIKE_HUB_URL=http://127.0.0.1:7777 \
+    STRIKE_SERVER_KEY=dev \
+    STRIKE_SERVER_HOST=127.0.0.1 \
+    STRIKE_SERVER_BIND=0.0.0.0 \
+    STRIKE_SERVER_PORT=27015 \
+    WGPU_BACKEND=vulkan \
+    WGPU_POWER_PREF=low \
+    XDG_RUNTIME_DIR=/tmp
+EXPOSE 7777/tcp
+EXPOSE 27015/udp
+VOLUME /data
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=12 \
+    CMD curl -fsS http://127.0.0.1:7777/v1/health >/dev/null
+ENTRYPOINT ["./entrypoint-stack.sh"]

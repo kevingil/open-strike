@@ -32,6 +32,20 @@ fn init_window(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
                 .unwrap_or(720.);
             window.resolution =
                 WindowResolution::new(width, height).with_scale_factor_override(1.0);
+            let window_x = std::env::var("CSRS_WINDOW_X")
+                .ok()
+                .and_then(|v| v.parse().ok());
+            let window_y = std::env::var("CSRS_WINDOW_Y")
+                .ok()
+                .and_then(|v| v.parse().ok());
+            if let (Some(x), Some(y)) = (window_x, window_y) {
+                window.position = bevy::window::WindowPosition::At(IVec2::new(x, y));
+            }
+        }
+        if let Ok(title) = std::env::var("CSRS_WINDOW_TITLE") {
+            if !title.is_empty() {
+                window.title = title;
+            }
         }
     }
 }
