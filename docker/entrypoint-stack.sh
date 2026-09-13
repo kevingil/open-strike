@@ -2,6 +2,12 @@
 # One-machine hub + match server. Used by the stack image, Fly, and local scripts.
 set -eu
 
+if [ -z "${VK_ICD_FILENAMES:-}" ] && [ -f /usr/share/vulkan/icd.d/lvp_icd.json ]; then
+    export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+fi
+export WGPU_BACKEND="${WGPU_BACKEND:-vulkan}"
+export WGPU_POWER_PREF="${WGPU_POWER_PREF:-low}"
+
 HUB_URL="${STRIKE_HUB_URL:-http://127.0.0.1:7777}"
 ADVERTISE="${STRIKE_SERVER_HOST:-127.0.0.1}"
 PORT="${STRIKE_SERVER_PORT:-27015}"
@@ -71,7 +77,8 @@ while true; do
     fi
     if [ "${RUN_SERVER}" != "0" ]; then
         if [ -z "${SERVER_PID}" ] || ! kill -0 "${SERVER_PID}" 2>/dev/null; then
-            echo "strike-server exited; restarting" >&2
+            echo "strike-server exited; restarting in 2s" >&2
+            sleep 2
             start_server
         fi
     fi

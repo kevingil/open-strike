@@ -177,7 +177,10 @@ tools/run-pair.sh --api    # register, friend, find/join over HTTP
 `docker compose -f docker-compose.machine.yml up --build` is the same layout in
 one container. Fly uses that image (`fly.toml`): dedicated IPv4,
 `STRIKE_SERVER_BIND=fly-global-services`, and `STRIKE_SERVER_HOST` set to the
-public address clients should join.
+public address clients should join. `tools/run-stack.sh` points Bevy at the
+repo `assets/` folder and uses lavapipe when `lvp_icd.json` is present. Pull
+Git LFS objects before playing a match (`git lfs pull`); pointer files register
+the server but cannot load maps.
 
 To run the same processes on the host:
 

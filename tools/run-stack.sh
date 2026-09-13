@@ -41,6 +41,12 @@ export STRIKE_SERVER_BOTS="${STRIKE_SERVER_BOTS:-6}"
 export STRIKE_SERVER_MAX_PLAYERS="${STRIKE_SERVER_MAX_PLAYERS:-12}"
 export STRIKE_STACK_SERVER="${STRIKE_STACK_SERVER:-1}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+if [ -z "${VK_ICD_FILENAMES:-}" ] && [ -f /usr/share/vulkan/icd.d/lvp_icd.json ]; then
+    export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+fi
+export WGPU_BACKEND="${WGPU_BACKEND:-vulkan}"
+export WGPU_POWER_PREF="${WGPU_POWER_PREF:-low}"
+export CARGO_MANIFEST_DIR="${CARGO_MANIFEST_DIR:-$ROOT}"
 
 LOG="${STACK_DIR}/stack.log"
 PID_FILE="${STACK_DIR}/stack.pid"
@@ -106,7 +112,8 @@ run_stack() {
         fi
         if [ "${STRIKE_STACK_SERVER}" != "0" ]; then
             if [ -z "${SERVER_PID}" ] || ! kill -0 "${SERVER_PID}" 2>/dev/null; then
-                echo "strike-server exited; restarting" >&2
+                echo "strike-server exited; restarting in 2s" >&2
+                sleep 2
                 start_server
             fi
         fi
