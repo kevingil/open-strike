@@ -182,7 +182,7 @@ fn knife_grip(id: WeaponId) -> Option<Transform> {
             // fist and the blade leaves the little-finger side, angled up across
             // the fist so it clears the sleeve, with the hook curving up and
             // away from the player. Scaled to a hand-sized 22 cm knife.
-            Transform::from_xyz(-2.4, -1.4, -0.9)
+            Transform::from_xyz(-4.0, 0.6, -0.3)
                 .with_rotation(Quat::from_rotation_z(135_f32.to_radians()))
                 .with_scale(Vec3::splat(70.0)),
         ),
