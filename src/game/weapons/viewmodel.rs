@@ -182,15 +182,17 @@ fn arms_handle(assets: &GameAssets, id: WeaponId, skin_index: usize) -> &Handle<
 /// native centimetres. The reference blade points along +Y with its flat on
 /// Z, and the fist closes around roughly y = -7 .. 0.
 fn knife_grip(id: WeaponId) -> Option<Transform> {
-    use std::f32::consts::FRAC_PI_2;
+    use std::f32::consts::{FRAC_PI_2, PI};
     match id {
         WeaponId::Karambit => Some(
             // Reverse grip: the ring sits on the index finger at the top of the
             // fist and the blade leaves the little-finger side, angled up across
-            // the fist so it clears the sleeve, with the hook curving up and
-            // away from the player. Scaled to a hand-sized 22 cm knife.
-            Transform::from_xyz(-6.0, 1.6, 2.7)
-                .with_rotation(Quat::from_rotation_z(135_f32.to_radians()))
+            // the fist so it clears the sleeve, with the hook curving back down
+            // at the tip. Scaled to a hand-sized 22 cm knife.
+            Transform::from_xyz(-6.0, 1.6, -3.6)
+                .with_rotation(
+                    Quat::from_rotation_z(135_f32.to_radians()) * Quat::from_rotation_y(PI),
+                )
                 .with_scale(Vec3::splat(70.0)),
         ),
         WeaponId::DefaultKnifeCt | WeaponId::DefaultKnifeT => Some(
