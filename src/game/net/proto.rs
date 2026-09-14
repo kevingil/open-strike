@@ -5,7 +5,7 @@ use crate::game::{config::WeaponId, matchplay::Team};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
 pub const MAX_DATAGRAM: usize = 60_000;
 /// Snapshots and inputs both go once per fixed tick.
 pub const TICK_HZ: f64 = 64.0;
@@ -126,6 +126,7 @@ pub enum NetEvent {
     },
     Shot {
         actor: u32,
+        weapon: u8,
         origin: Vec3,
         end: Vec3,
     },
