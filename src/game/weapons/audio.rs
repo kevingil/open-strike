@@ -1,21 +1,25 @@
 //! Weapon and player cues consume accepted gameplay actions.
-use super::{ShotFired, WeaponState};
+use super::{audio_bindings::sound_ids, ShotFired, WeaponState};
 use crate::game::{
-    config::PlayerSettings,
+    config::{PlayerSettings, WeaponId},
     matchplay::Combatant,
     player::player::{LocalPlayer, PlayerEntity},
     sound_library::SoundLibrary,
     GameState,
 };
 use bevy::{audio::Volume, prelude::*};
+use std::collections::HashMap;
+
+struct WeaponCues {
+    shot: Handle<AudioSource>,
+    draw: Handle<AudioSource>,
+    reload: Vec<(f32, Handle<AudioSource>)>,
+}
 
 #[derive(Resource)]
 struct Cues {
-    shot: Handle<AudioSource>,
-    draw: Handle<AudioSource>,
-    knife_draw: Handle<AudioSource>,
+    weapons: HashMap<WeaponId, WeaponCues>,
     knife_slash: Handle<AudioSource>,
-    reload: [(f32, Handle<AudioSource>); 3],
     view_reload: [(f32, Handle<AudioSource>); 2],
     hit: [Handle<AudioSource>; 5],
     step: [Handle<AudioSource>; 4],
@@ -74,23 +78,54 @@ fn prepare(mut commands: Commands, mut library: ResMut<SoundLibrary>, server: Re
             library.catalog["misc/step_test_loop"].path
         );
     }
+    let weapons = WeaponId::ALL
+        .into_iter()
+        .map(|weapon| {
+            let ids = sound_ids(weapon);
+            let mut recording = |id: &str, fallback: &str| {
+                library.load(id, &server).unwrap_or_else(|| {
+                    library
+                        .load(fallback, &server)
+                        .expect("Bundled fallback exists")
+                })
+            };
+            let cues = WeaponCues {
+                shot: recording(ids.shot, "weapons/ak47-1"),
+                draw: recording(ids.draw, "weapons/ak47_draw"),
+                reload: ids
+                    .reload
+                    .iter()
+                    .enumerate()
+                    .map(|(index, (at, id))| {
+                        let fallback = match index {
+                            0 => "weapons/ak47_clipout",
+                            1 => "weapons/ak47_clipin",
+                            _ => "weapons/ak47_boltpull",
+                        };
+                        (*at, recording(id, fallback))
+                    })
+                    .collect(),
+            };
+            info!(
+                "Weapon audio {}: {}",
+                weapon.name(),
+                library
+                    .catalog
+                    .get(ids.shot)
+                    .unwrap_or(&library.catalog["weapons/ak47-1"])
+                    .path
+            );
+            (weapon, cues)
+        })
+        .collect();
     let mut recording = |id| {
         library
             .load(id, &server)
             .expect("Required gameplay sound is cataloged")
     };
     commands.insert_resource(Cues {
-        shot: recording("weapons/ak47-1"),
-        draw: recording("weapons/ak47_draw"),
-        knife_draw: recording("weapons/knife_draw"),
+        weapons,
         knife_slash: recording("weapons/knife_slash"),
-        // Match magazine extraction/insertion and bolt pull in the authored
-        // 0..99-frame reload_rifle animation, scaled to the simulation duration.
-        reload: [
-            (18.0 / 99.0, recording("weapons/ak47_clipout")),
-            (65.0 / 99.0, recording("weapons/ak47_clipin")),
-            (73.0 / 99.0, recording("weapons/ak47_boltpull")),
-        ],
         // Reference AKM: magazine knock-out and seating, with no bolt pull.
         view_reload: [
             (35.0 / 130.5, recording("weapons/ak47_clipout")),
@@ -154,7 +189,7 @@ fn sounds(
     for shot in shots.read() {
         play(
             &mut commands,
-            cues.shot.clone(),
+            cues.weapons[&shot.weapon].shot.clone(),
             shot.origin,
             settings.master_volume * 0.45,
             Some(shot.actor) != local,
@@ -173,11 +208,7 @@ fn sounds(
         if actor.alive() && (!state.alive || state.equips != weapon.equips) {
             play(
                 &mut commands,
-                if weapon.active.is_knife() {
-                    cues.knife_draw.clone()
-                } else {
-                    cues.draw.clone()
-                },
+                cues.weapons[&weapon.active].draw.clone(),
                 transform.translation,
                 settings.master_volume * 0.4,
                 Some(entity) != local,
@@ -203,10 +234,10 @@ fn sounds(
                 -1.0
             };
             let elapsed = weapon.active.stats().reload_seconds - weapon.reload_remaining;
-            let reload_cues = if Some(entity) == local {
+            let reload_cues = if Some(entity) == local && weapon.active == WeaponId::AK47 {
                 &cues.view_reload[..]
             } else {
-                &cues.reload[..]
+                &cues.weapons[&weapon.active].reload[..]
             };
             for (fraction, clip) in reload_cues {
                 let at = fraction * weapon.active.stats().reload_seconds;
