@@ -178,13 +178,12 @@ fn knife_grip(id: WeaponId) -> Option<Transform> {
     use std::f32::consts::FRAC_PI_2;
     match id {
         WeaponId::Karambit => Some(
-            // Forward grip: the ring hangs off the little-finger end of the
-            // fist, the handle fills the fingers and the blade rises past the
-            // thumb with its hook curving away from the player. The reverse
-            // grip would run the blade along the forearm, hidden behind the
-            // sleeve in this rig's pose. Scaled to a hand-sized 22 cm knife.
-            Transform::from_xyz(0.0, 3.2, 3.1)
-                .with_rotation(Quat::from_rotation_x(-12_f32.to_radians()))
+            // Reverse grip: the ring sits on the index finger at the top of the
+            // fist and the blade leaves the little-finger side, angled up across
+            // the fist so it clears the sleeve, with the hook curving up and
+            // away from the player. Scaled to a hand-sized 22 cm knife.
+            Transform::from_xyz(-2.4, -1.4, -0.9)
+                .with_rotation(Quat::from_rotation_z(135_f32.to_radians()))
                 .with_scale(Vec3::splat(70.0)),
         ),
         WeaponId::DefaultKnifeCt | WeaponId::DefaultKnifeT => Some(
