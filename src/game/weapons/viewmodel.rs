@@ -131,9 +131,16 @@ fn profile(id: WeaponId) -> Transform {
     if id.is_knife() {
         // Native reference centimetres, viewed from (0, 10, 32) in Blender.
         let tilt = Quat::from_rotation_x((13.0_f32 / 40.0).atan());
+        // The karambit ring sits on the index finger, so turn the fist a
+        // little toward the player to bring that finger into view.
+        let yaw = Quat::from_rotation_y(if id == WeaponId::Karambit {
+            8_f32.to_radians()
+        } else {
+            0.0
+        });
         Transform {
-            translation: tilt * Vec3::new(0.0, -0.32, -0.10) + Vec3::Y * 0.075,
-            rotation: tilt * Quat::from_rotation_y(std::f32::consts::PI),
+            translation: yaw * (tilt * Vec3::new(0.0, -0.32, -0.10) + Vec3::Y * 0.075),
+            rotation: yaw * tilt * Quat::from_rotation_y(std::f32::consts::PI),
             scale: Vec3::splat(0.01),
         }
     } else if id.has_viewmodel() {
@@ -182,7 +189,7 @@ fn knife_grip(id: WeaponId) -> Option<Transform> {
             // fist and the blade leaves the little-finger side, angled up across
             // the fist so it clears the sleeve, with the hook curving up and
             // away from the player. Scaled to a hand-sized 22 cm knife.
-            Transform::from_xyz(-4.0, 0.6, -0.3)
+            Transform::from_xyz(-6.0, 1.6, 2.7)
                 .with_rotation(Quat::from_rotation_z(135_f32.to_radians()))
                 .with_scale(Vec3::splat(70.0)),
         ),
