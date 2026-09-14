@@ -45,6 +45,26 @@ SOURCE_ROTATIONS = {
     "mp7": (0, 0, -90),
     "mp5sd": (0, 0, 90),
     "ump45": (0, 0, -90),
+    "p90": (0, 0, 0),
+    "bizon": (0, 0, 180),
+    "nova": (0, 0, 90),
+    "xm1014": (0, 20, 90),
+    "sawedoff": (0, 0, 180),
+    "m249": (90, 0, 0),
+    "negev": (0, 0, 180),
+    "galil": (0, 0, 180),
+    "famas": (0, 0, 180),
+    "m4a4": (0, 0, 180),
+    "m4a1s": (0, 0, 90),
+    "sg553": (0, 0, 90),
+    "aug": (0, 0, 0),
+    "ssg08": (0, 0, 180),
+    "awp": (0, 0, 180),
+    "g3sg1": (0, 0, 180),
+    "scar20": (0, 0, 180),
+    "knife_ct": (0, 0, -90),
+    "knife_t": (90, 0, 0),
+    "karambit": (0, 0, 0),
 }
 LENGTHS = {
     "pistol": 0.22,
@@ -247,6 +267,51 @@ def strip_named(*needles):
             bpy.data.objects.remove(obj, do_unlink=True)
 
 
+def keep_named(*needles):
+    for obj in list(meshes()):
+        if not named(obj, *needles):
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+
+def drop_duplicates():
+    for obj in list(meshes()):
+        if ".00" in obj.name:
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+
+def volume(obj):
+    low, high = bounds([obj])
+    size = high - low
+    return size.x * size.y * size.z
+
+
+def center_of(obj):
+    low, high = bounds([obj])
+    return (low + high) / 2
+
+
+def drop_loose_mags():
+    objects = meshes()
+    if len(objects) < 2:
+        return
+    main = max(objects, key=volume)
+    main_center = center_of(main)
+    extras = [
+        obj
+        for obj in objects
+        if obj != main and 0.2 < volume(obj) < 1.0 and center_of(obj).z < main_center.z
+    ]
+    extras.sort(key=lambda obj: (center_of(obj) - main_center).length)
+    for obj in extras[1:]:
+        bpy.data.objects.remove(obj, do_unlink=True)
+    for obj in list(meshes()):
+        if obj == main:
+            continue
+        point = center_of(obj)
+        if volume(obj) < 0.02 and abs(point.x - main_center.x) > 0.8:
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+
 def normalize(key: str, kind: str):
     objects = meshes()
     if not objects:
@@ -317,8 +382,16 @@ def add_silencer():
     if not objects:
         return
     low, high = bounds(objects)
-    depth = max(0.08, (high.y - low.y) * 0.22)
-    cylinder("Silencer", (0, high.y + depth * 0.5, high.z - 0.012), 0.012, depth)
+    tip = None
+    for obj in objects:
+        for vertex in obj.data.vertices:
+            point = obj.matrix_world @ vertex.co
+            if tip is None or point.y > tip.y:
+                tip = point
+    depth = max(0.08, (high.y - low.y) * 0.18)
+    can = cylinder("Silencer", (0, 0, 0), 0.011, depth)
+    can.location = (tip.x, tip.y + depth * 0.32, tip.z)
+    apply_world(can)
 
 
 def add_scope():
@@ -327,7 +400,7 @@ def add_scope():
         return
     low, high = bounds(objects)
     y = (low.y + high.y) * 0.55
-    z = high.z + 0.018
+    z = high.z - 0.008
     body = cylinder("CompactScope", (0, y, z), 0.011, 0.07)
     ring = cylinder("CompactScopeRing", (0, y + 0.028, z), 0.014, 0.012)
     return body, ring
@@ -456,12 +529,20 @@ def build(key: str, notes: str, path: Optional[Path]):
         import_source(
             path,
             root="Group063" if key == "dual_berettas" else None,
-            frame=1 if key in {"glock18", "p250", "mac10"} else None,
+            frame=1 if key in {"glock18", "p250", "mac10", "sawedoff"} else None,
             remove_groups=("Suppressor_07",) if key == "mac10" else (),
         )
         if key == "deagle":
             for name in ("Bullet_low_Bullet_0", "BulletCase_low_Bullet_0"):
                 bpy.data.objects.remove(bpy.data.objects[name], do_unlink=True)
+        if key == "sawedoff":
+            keep_named("sawnoff")
+        if key == "knife_t":
+            strip_named("scabbard")
+        if key == "scar20":
+            drop_duplicates()
+        if key == "sg553":
+            drop_loose_mags()
         if "silencer=strip" in notes:
             strip_named("silencer", "suppress", "sionics", "can")
         if "scope=strip" in notes:
@@ -475,10 +556,7 @@ def build(key: str, notes: str, path: Optional[Path]):
             duplicate_akimbo()
         if "silencer=add" in notes:
             add_silencer()
-        if "scope=add" in notes or (
-            "scope=keep" in notes
-            and not any(named(o, "scope", "optic") for o in meshes())
-        ):
+        if "scope=add" in notes:
             add_scope()
     if not meshes():
         raise ValueError(f"No meshes imported for {key}")

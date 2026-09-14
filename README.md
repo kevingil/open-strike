@@ -145,45 +145,45 @@ Open Strike's original code and generated default sounds use the [MIT license](L
 
 - "UMP-45 (FREE)" (https://sketchfab.com/3d-models/53ec6320f1c84960a5d49fa0b7a11480) by Levi Giovani is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "P90 Sub Machinegun" (https://sketchfab.com/3d-models/19b39a4ee12442078c7c79c52118e01f) by commiessar is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "P90 Sub Machinegun" (https://sketchfab.com/3d-models/p90-sub-machinegun-19b39a4ee12442078c7c79c52118e01f) by commiessar is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "PP-19 Bizon" (https://sketchfab.com/3d-models/b6c6364131f04be9b5691f323e6d391f) by AvnisT is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "PP-19 Bizon | ПП-19 Бизон" (https://sketchfab.com/3d-models/pp-19-bizon-19-b6c6364131f04be9b5691f323e6d391f) by AvnisT is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "Shotgun - NOVA" (https://sketchfab.com/3d-models/8c091501adeb493a997544fee3da50f6) by Beerus is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "Shotgun - NOVA" (https://sketchfab.com/3d-models/shotgun-nova-8c091501adeb493a997544fee3da50f6) by Beerus is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "Shotgun Benelli M4" (https://sketchfab.com/3d-models/e0d23db5a8b64ff2980875834b425c4b) by drollShark is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "Shotgun Benelli M4" (https://sketchfab.com/3d-models/shotgun-benelli-m4-e0d23db5a8b64ff2980875834b425c4b) by drollShark is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "sawnoff animated" (https://sketchfab.com/3d-models/806f8327bed34fc3b0e3911d01f0566d) by DJMaesen is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "sawnoff animated" (https://sketchfab.com/3d-models/sawnoff-animated-806f8327bed34fc3b0e3911d01f0566d) by DJMaesen is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "Low-Poly M249 SAW" (https://sketchfab.com/3d-models/76011c365636451c90a8e3a46c2d8ca5) by TastyTony is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "Low-Poly M249 SAW" (https://sketchfab.com/3d-models/low-poly-m249-saw-76011c365636451c90a8e3a46c2d8ca5) by TastyTony is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "IWI Negev NG-5" (https://sketchfab.com/3d-models/68ff380279c54f1d9ab255c75fe503d2) by GoldbergR is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "IWI Negev NG-5 (Old Version/Low-Poly)" (https://sketchfab.com/3d-models/iwi-negev-ng-5-old-versionlow-poly-68ff380279c54f1d9ab255c75fe503d2) by GoldbergR is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "Galil ACE 23 (low-poly)" (https://sketchfab.com/3d-models/b36a4fec55b148d08afa3f135cd9a807) by ScurvyWoof is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "Galil ACE 23 (low-poly)" (https://sketchfab.com/3d-models/galil-ace-23-low-poly-b36a4fec55b148d08afa3f135cd9a807) by ScurvyWoof is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "FAMAS" (https://sketchfab.com/3d-models/7d35e14ad8874d148ce9cc46e5765a6b) by Frostoise is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "FAMAS" (https://sketchfab.com/3d-models/famas-7d35e14ad8874d148ce9cc46e5765a6b) by Frostoise is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "M4A4 Counter Strike 2" (https://sketchfab.com/3d-models/222fd3948aab45eb9d0cbced9c80308a) by blazitt is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "M4A4 Counter Strike 2" (https://sketchfab.com/3d-models/m4a4-counter-strike-2-222fd3948aab45eb9d0cbced9c80308a) by blazitt is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "Low Poly Colt M4A1" (https://sketchfab.com/3d-models/de142447b4d047bbb0311c2974520f1e) by puresaltt is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "Low Poly Colt M4A1" (https://sketchfab.com/3d-models/low-poly-colt-m4a1-de142447b4d047bbb0311c2974520f1e) by puresaltt is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "low-poly SIG SG-553" (https://sketchfab.com/3d-models/2e9ebf6ecc004e8a82f5fb5117f0eb10) by D_U is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "low-poly SIG SG-553" (https://sketchfab.com/3d-models/low-poly-sig-sg-553-2e9ebf6ecc004e8a82f5fb5117f0eb10) by D_U is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "Aug A3 M1with Aimpoint micro T2" (https://sketchfab.com/3d-models/73e9323ba9ed40bfb308babd29c68280) by Al is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "Aug A3 M1with Aimpoint micro T2" (https://sketchfab.com/3d-models/aug-a3-m1with-aimpoint-micro-t2-73e9323ba9ed40bfb308babd29c68280) by Al is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "ssg 08| Fever Dream" (https://sketchfab.com/3d-models/3f3daf78b04149aa867abfba231fadf8) by Rifeor is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "ssg 08| Fever Dream" (https://sketchfab.com/3d-models/ssg-08-fever-dream-3f3daf78b04149aa867abfba231fadf8) by Rifeor is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "AWP" (https://sketchfab.com/3d-models/b7101f0325aa4b0dad8512d0ec67bfa1) by forestie is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "AWP" (https://sketchfab.com/3d-models/awp-b7101f0325aa4b0dad8512d0ec67bfa1) by forestie is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "HK mod. G3SG/1" (https://sketchfab.com/3d-models/21b8e3bceca64b00856c1e9abcca8573) by Javier Clemente García is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "HK mod. G3SG/1 w/ \"Kill Cam\" & BT Brass Catcher" (https://sketchfab.com/3d-models/hk-mod-g3sg1-w-kill-cam-bt-brass-catcher-21b8e3bceca64b00856c1e9abcca8573) by Javier Clemente García is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "FN-SCAR L" (https://sketchfab.com/3d-models/5951c446c76343e2a03bee582881e417) by wertat is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "FN-SCAR L" (https://sketchfab.com/3d-models/fn-scar-l-5951c446c76343e2a03bee582881e417) by wertat is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "low-poly KM2000" (https://sketchfab.com/3d-models/3ae258cee29b44358efec2c7bbe7b59d) by D_U is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "low-poly KM2000" (https://sketchfab.com/3d-models/low-poly-km2000-3ae258cee29b44358efec2c7bbe7b59d) by D.U. is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "Tactical Knife" (https://sketchfab.com/3d-models/5fb333837f1343caa6a0e80a46b68ac1) by lunea is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "Tactical Knife" (https://sketchfab.com/3d-models/tactical-knife-5fb333837f1343caa6a0e80a46b68ac1) by lunea is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
-- "Karambit" (https://sketchfab.com/3d-models/dfd7606f189a413681305a39b8841ce8) by Diamonddogkz is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- "Karambit" (https://sketchfab.com/3d-models/karambit-dfd7606f189a413681305a39b8841ce8) by Diamonddogkz is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
 - "Warehouse fbx model" (https://skfb.ly/pEKFT) by mason_roman's helloneighborfangamingmodelworks is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
