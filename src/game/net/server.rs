@@ -642,6 +642,7 @@ fn broadcast(
     for shot in shots.read() {
         let event = NetEvent::Shot {
             actor: id_of(shot.actor),
+            weapon: weapon_code(shot.weapon),
             origin: shot.origin,
             end: shot.end,
         };

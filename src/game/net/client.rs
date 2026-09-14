@@ -521,10 +521,16 @@ fn apply_snapshot(
                     team: *killer_team,
                 });
             }
-            NetEvent::Shot { actor, origin, end } => {
+            NetEvent::Shot {
+                actor,
+                weapon,
+                origin,
+                end,
+            } => {
                 if *actor != mine {
                     shots.write(ShotFired {
                         actor: entity_of(*actor),
+                        weapon: weapon_from_code(*weapon),
                         origin: *origin,
                         end: *end,
                     });
