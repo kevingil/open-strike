@@ -52,6 +52,11 @@ python3 tools/export_map.py
 python3 tools/inspect_assets.py
 ```
 
+`tools/export_map.py` caps map textures at 1024px so Dust 2 stays under GitHub's
+100MB blob limit. Recap an existing GLB with `python3 tools/cap_glb_textures.py <path>`
+(needs Pillow). Authoring sources larger than 100MB stay local: the Dust 2 and
+defender `.blend` files, `defense_default_skin.glb`, and `shooter.blend`.
+
 On macOS, replace `blender` with `/Applications/Blender.app/Contents/MacOS/Blender` if it is not on PATH. Export characters before weapons. Catalog download needs `SKETCHFAB_TOKEN` or `SKETCHFAB_API_TOKEN`; failed downloads return a nonzero exit status. The catalog exporter checks all requested sources before exporting and refuses to generate placeholder meshes. Supply `-- <weapon keys>` to export a subset; `-- knife_stained knife_forest` rebuilds the locally authored finishes without downloads. Outputs go to `assets/generated/`; required character action bindings are recorded in `assets/config/character_clips.json`.
 
 The exporter bakes the donor's evaluated motion onto each target's own rest skeleton, authors grounded crouch/death variants, aligns the support hand, limits character textures to 2K, and exports separate world/first-person AK scenes. Weapon sockets are `WeaponGrip`, `Muzzle`, `Magazine` and `Bolt`; first-person sleeves retain their length and the rifle retains its stock. First-person reload uses weapon-space magazine insertion from below, a charging-handle pull, and a recovery pose matching idle. Body materials use a declared cloth/skin/painted-armor surface policy instead of the imported metallic response. Inspection checks scene/clip/socket/material contracts, skin joint counts and finite geometry/animation values. Blender-only imports are explicitly marked for static checking; actual export execution validates those APIs.
@@ -178,9 +183,7 @@ tools/run-pair.sh --api    # register, friend, find/join over HTTP
 one container. Fly uses that image (`fly.toml`): dedicated IPv4,
 `STRIKE_SERVER_BIND=fly-global-services`, and `STRIKE_SERVER_HOST` set to the
 public address clients should join. `tools/run-stack.sh` points Bevy at the
-repo `assets/` folder and uses lavapipe when `lvp_icd.json` is present. Pull
-Git LFS objects before playing a match (`git lfs pull`); pointer files register
-the server but cannot load maps.
+repo `assets/` folder and uses lavapipe when `lvp_icd.json` is present.
 
 To run the same processes on the host:
 
