@@ -61,6 +61,25 @@ STRIKE_HUB_URL=http://127.0.0.1:7777 cargo run --locked --bin open-strike
 
 `docker compose up` publishes the hub at `http://127.0.0.1:7777` and a Dust 2 team deathmatch on UDP `27015`. Account data lives in the `hub-data` volume. `docker compose restart` restarts both services; `docker compose down` stops them. Start only the hub with `docker compose up hub` if you just need accounts and friends.
 
+To run both listeners in one process tree (the Fly / single-machine layout):
+
+```sh
+# Native: hub TCP 7777 + match UDP 27015
+tools/run-stack.sh --detach
+
+# Or one Docker service exposing both ports
+docker compose -f docker-compose.machine.yml up --build
+```
+
+Point two clients at that hub to exercise accounts, friends, and a join:
+
+```sh
+tools/run-pair.sh          # two windowed clients (host + friend)
+tools/run-pair.sh --api    # same hub flow over HTTP, no GPU
+```
+
+On Fly, one Machine publishes TCP `7777` and UDP `27015`. Allocate a dedicated IPv4 and set `STRIKE_SERVER_HOST` to it so clients receive a reachable advertise address. The match server binds UDP to `fly-global-services` via `STRIKE_SERVER_BIND`.
+
 The first account registered on an empty hub becomes its administrator. Login accepts username or email. To promote a later account:
 
 ```sh

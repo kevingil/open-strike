@@ -165,6 +165,23 @@ STRIKE_HUB_URL=http://127.0.0.1:7777 cargo run --locked --bin open-strike
 server. Promote an account with `docker compose exec hub ./strike-hub bootstrap-admin <username>`.
 Start only the hub with `docker compose up hub`.
 
+One machine (hub TCP 7777 and match UDP 27015 in the same process tree), then a
+host/friend pair:
+
+```sh
+tools/run-stack.sh --detach
+tools/run-pair.sh          # two windowed clients; falls back to --api without a display
+tools/run-pair.sh --api    # register, friend, find/join over HTTP
+```
+
+`docker compose -f docker-compose.machine.yml up --build` is the same layout in
+one container. Fly uses that image (`fly.toml`): dedicated IPv4,
+`STRIKE_SERVER_BIND=fly-global-services`, and `STRIKE_SERVER_HOST` set to the
+public address clients should join. `tools/run-stack.sh` points Bevy at the
+repo `assets/` folder and uses lavapipe when `lvp_icd.json` is present. Pull
+Git LFS objects before playing a match (`git lfs pull`); pointer files register
+the server but cannot load maps.
+
 To run the same processes on the host:
 
 ```sh
@@ -207,7 +224,8 @@ sidebar shows a red badge and disables social controls; local play is unaffected
 
 `strike-server --hub <url> --port <udp port> --mode dm|tdm --map dust2 --bots 6 --max-players 12`
 runs a standalone match; without `--hub` it accepts any join ticket as a display name for
-LAN testing. It needs a GPU adapter for Bevy's render plugin (software Vulkan such as
+LAN testing. `STRIKE_SERVER_BIND` selects the UDP bind host (`0.0.0.0` locally,
+`fly-global-services` on Fly). It needs a GPU adapter for Bevy's render plugin (software Vulkan such as
 lavapipe is enough) but loads no textures or character models. Admin endpoints under
 `/v1/admin/*` (accounts, roles, bans, settings, audit log) accept the admin's session token;
 `strike-hub bootstrap-admin <username>` promotes an account from the shell.
@@ -215,7 +233,9 @@ lavapipe is enough) but loads no textures or character models. Admin endpoints u
 `CSRS_ONLINE_SCENARIO=host|friend` with `CSRS_USER`, `CSRS_FRIEND`, `CSRS_ONLINE_MODE` and
 `CSRS_CAPTURE_DIR` drives a full walkthrough (register or sign in, befriend, find or join a
 match, capture screenshots) through the same handlers the menus use. `CSRS_WINDOWED=1` opens
-a `CSRS_WIDTH`×`CSRS_HEIGHT` window instead of fullscreen.
+a `CSRS_WIDTH`×`CSRS_HEIGHT` window instead of fullscreen. `tools/run-pair.sh` launches both
+roles with isolated `STRIKE_LOCAL_DB` files; `CSRS_WINDOW_X` / `CSRS_WINDOW_Y` place the
+windows side by side.
 
 ## Native diagnostics
 

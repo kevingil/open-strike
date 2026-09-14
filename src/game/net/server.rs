@@ -175,12 +175,15 @@ fn start(
     config.map = args.map.clone();
     config.match_settings.time_limit = Some(Duration::from_secs(args.time_limit_secs));
     config.match_settings.score_limit = Some(args.score_limit);
-    let socket = UdpSocket::bind(("0.0.0.0", args.port)).expect("bind match port");
+    let bind_host = std::env::var("STRIKE_SERVER_BIND").unwrap_or_else(|_| "0.0.0.0".into());
+    let bind_addr = format!("{bind_host}:{}", args.port);
+    let socket = UdpSocket::bind(&bind_addr).unwrap_or_else(|e| {
+        panic!("bind match port {bind_addr}: {e}");
+    });
     socket.set_nonblocking(true).unwrap();
     info!(
-        "strike-server {} listening on udp/{} ({} on {}, {} bots, {} seats)",
+        "strike-server {} listening on udp/{bind_addr} ({} on {}, {} bots, {} seats)",
         args.server_id,
-        args.port,
         args.mode.name(),
         args.map.name(),
         args.bots,

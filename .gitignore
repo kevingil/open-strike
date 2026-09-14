@@ -13,6 +13,10 @@ crates/strike-hub/hub.db-*
 /local.db
 /local.db-*
 
+# One-machine stack + client-pair working dirs
+/.stack/
+/.pair/
+
 # Private planning files
 .plans/
 .cursor/
