@@ -30,12 +30,12 @@ WEAPONS = [
     ("mp5sd", "2b96ccb2dc51496e93f41734663bcadf", "WillyG99", "MP5SD (Silenced MP5)", ""),
     ("ump45", "53ec6320f1c84960a5d49fa0b7a11480", "Levi Giovani", "UMP-45 (FREE)", ""),
     ("p90", "19b39a4ee12442078c7c79c52118e01f", "commiessar", "P90 Sub Machinegun", ""),
-    ("bizon", "b6c6364131f04be9b5691f323e6d391f", "AvnisT", "PP-19 Bizon", ""),
+    ("bizon", "b6c6364131f04be9b5691f323e6d391f", "AvnisT", "PP-19 Bizon | ПП-19 Бизон", ""),
     ("nova", "8c091501adeb493a997544fee3da50f6", "Beerus", "Shotgun - NOVA", ""),
     ("xm1014", "e0d23db5a8b64ff2980875834b425c4b", "drollShark", "Shotgun Benelli M4", ""),
     ("sawedoff", "806f8327bed34fc3b0e3911d01f0566d", "DJMaesen", "sawnoff animated", ""),
     ("m249", "76011c365636451c90a8e3a46c2d8ca5", "TastyTony", "Low-Poly M249 SAW", ""),
-    ("negev", "68ff380279c54f1d9ab255c75fe503d2", "GoldbergR", "IWI Negev NG-5", ""),
+    ("negev", "68ff380279c54f1d9ab255c75fe503d2", "GoldbergR", "IWI Negev NG-5 (Old Version/Low-Poly)", ""),
     # rifles
     ("galil", "b36a4fec55b148d08afa3f135cd9a807", "ScurvyWoof", "Galil ACE 23 (low-poly)", ""),
     ("famas", "7d35e14ad8874d148ce9cc46e5765a6b", "Frostoise", "FAMAS", ""),
@@ -45,10 +45,10 @@ WEAPONS = [
     ("aug", "73e9323ba9ed40bfb308babd29c68280", "Al", "Aug A3 M1with Aimpoint micro T2", "scope=strip"),
     ("ssg08", "3f3daf78b04149aa867abfba231fadf8", "Rifeor", "ssg 08| Fever Dream", "paint=black scope=keep"),
     ("awp", "b7101f0325aa4b0dad8512d0ec67bfa1", "forestie", "AWP", "scope=keep"),
-    ("g3sg1", "21b8e3bceca64b00856c1e9abcca8573", "Javier Clemente García", "HK mod. G3SG/1", "scope=keep"),
+    ("g3sg1", "21b8e3bceca64b00856c1e9abcca8573", "Javier Clemente García", 'HK mod. G3SG/1 w/ "Kill Cam" & BT Brass Catcher', "scope=keep"),
     ("scar20", "5951c446c76343e2a03bee582881e417", "wertat", "FN-SCAR L", "scope=keep"),
     # knives
-    ("knife_ct", "3ae258cee29b44358efec2c7bbe7b59d", "D_U", "low-poly KM2000", "knife=1"),
+    ("knife_ct", "3ae258cee29b44358efec2c7bbe7b59d", "D.U.", "low-poly KM2000", "knife=1"),
     ("knife_t", "5fb333837f1343caa6a0e80a46b68ac1", "lunea", "Tactical Knife", "knife=1"),
     ("karambit", "dfd7606f189a413681305a39b8841ce8", "Diamonddogkz", "Karambit", "knife=1"),
 ]
