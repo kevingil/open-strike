@@ -363,3 +363,28 @@ To regenerate just the knife assets:
 Add `CSRS_REFERENCE_KNIFE=1` to the native knife capture command to inspect the
 reference blade, and `CSRS_TEAM=defender` to inspect Police. See
 [asset licensing and provenance](../ASSET_LICENSES.md) for attribution and modifications.
+
+### Inventory equipment models
+
+`assets/config/equipment.json` owns the ten fixed inventory entries, their side
+availability, original model credits/checksums, and explicit export composition.
+The original downloaded GLBs live under ignored `assets/models/catalog/{key}/`.
+Rebuild all equipment meshes and textured cards, or supply specific item keys:
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup \
+  --python tools/export_equipment.py -- flashbang smoke kevlar_helmet
+```
+
+Outputs are `assets/generated/equipment/{key}.glb` and
+`assets/generated/ui/inventory/{key}.png`. The grenade and Equipment inventory
+categories use those cards; Load Out shows the fixed equipment for the selected
+side. Defuse kit is defender-only, bomb is attacker-only. Kevlar and helmets are
+inventory presentation only: they are separate from `WeaponId`, never equipped
+as held weapons, and never attached to character models. This imports assets and
+menu presentation; grenade, Zeus, and bomb/defuse gameplay mechanics are not added.
+
+For native UI inspection, combine `CSRS_CAPTURE` and
+`CSRS_CAPTURE_INVENTORY=1` with `CSRS_INVENTORY_CATEGORY=equipment|grenades`.
+`CSRS_CAPTURE_LOADOUT=1 CSRS_LOADOUT_SIDE=defender` opens the defender loadout;
+the default loadout capture opens the attacker side.
