@@ -39,6 +39,7 @@ impl Default for SoundLibrary {
                 }) {
                 Ok(overrides) => {
                     let mut selected = 0;
+                    let mut rejected = 0;
                     for (id, clip) in overrides {
                         let path = std::path::Path::new(&clip.path);
                         // Paths use Bevy's asset root. Invalid or absent local
@@ -48,16 +49,22 @@ impl Default for SoundLibrary {
                             .all(|part| matches!(part, std::path::Component::Normal(_)))
                             && path.extension().is_some_and(|extension| extension == "wav")
                             && std::path::Path::new("assets").join(path).is_file();
-                        // This optional walking loop replaces the discrete
-                        // fallback steps only when selected by a local pack.
-                        if valid && (catalog.contains_key(&id) || id == "misc/step_test_loop") {
+                        // Packs can add weapon-specific IDs beyond the bundled
+                        // fallback catalog. Only requested cues are loaded.
+                        if valid {
                             catalog.insert(id, clip);
                             selected += 1;
+                        } else {
+                            warn!(
+                                "Ignoring local sound {id}: invalid or missing WAV {}",
+                                clip.path
+                            );
+                            rejected += 1;
                         }
                     }
                     info!(
-                        "Using {} local sound overrides; other cues use generated defaults",
-                        selected
+                        "Using {} local sounds from {}; {} invalid or missing files; other cues use generated defaults",
+                        selected, path.display(), rejected
                     );
                 }
                 Err(error) => warn!(

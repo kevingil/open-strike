@@ -1,4 +1,5 @@
 pub mod config;
+pub mod equipment;
 pub mod cursor;
 pub mod game;
 pub mod level;

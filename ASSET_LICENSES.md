@@ -33,3 +33,26 @@ Audio separation alone is not clearance to publish all assets currently present
 in this repository. Use generated audio for public demonstrations unless the
 recordings used have permission covering that use. Ignoring a local file does
 not change its copyright status.
+
+## Inventory equipment
+
+The ten locally supplied models below embed CC BY 4.0 metadata. Sources and SHA-256
+checksums are retained in `assets/config/equipment.json`. `tools/export_equipment.py`
+bakes and scales the meshes, selects a single assembled flashbang/smoke grenade,
+composes the vest-and-helmet preview, and renders the inventory icons. The derived
+`assets/generated/equipment/` GLBs and corresponding inventory PNGs retain those
+source licenses. Armor is inventory presentation only and is never attached to
+a gameplay character.
+
+| Source | Author | License |
+| --- | --- | --- |
+| [M84 Stun Grenade "Flashbang"](https://sketchfab.com/3d-models/m84-stun-grenade-flashbang-3dbda8fe68ff4efdbf59f7d414c5619c) | Vanillatography | CC BY 4.0 |
+| [M18 Smoke Grenade](https://sketchfab.com/3d-models/m18-smoke-grenade-46343925ad0e47cf927e66da7953c372) | Vanillatography | CC BY 4.0 |
+| [M67 GRENADE](https://sketchfab.com/3d-models/m67-grenade-d202644dfaf441a0a145befbd7add45a) | Tiago Lopes | CC BY 4.0 |
+| [Molotov Cocktail](https://sketchfab.com/3d-models/molotov-cocktail-e57a0fd669974a3dab7d3919bda9032c) | LiliumLetifer | CC BY 4.0 |
+| ["Stun" grenade Mod. 7290-T](https://sketchfab.com/3d-models/stun-grenade-mod-7290-t-89dee6ff8bb841198791d7107bd38916) | Javier Clemente García | CC BY 4.0 |
+| [Tactical Plate Carrier Vest - Game Ready](https://sketchfab.com/3d-models/tactical-plate-carrier-vest-game-ready-3b51e6329dbb4b0aa14e43f12eb6c42a) | Exactly | CC BY 4.0 |
+| [ACH (Advanced Combat Helmet) LowPoly, Game ready](https://sketchfab.com/3d-models/ach-advanced-combat-helmet-lowpoly-game-ready-3ed4db6157194c1c9021ae2dd9af74b6) | Armored Wave | CC BY 4.0 |
+| [Yellow Taser Gun](https://sketchfab.com/3d-models/yellow-taser-gun-0044ade7b6344c009405c43c110bb8fa) | Richard Speight | CC BY 4.0 |
+| [Wire Cutter](https://sketchfab.com/3d-models/wire-cutter-20467a9af8b5415089c1b359d4253dab) | Robin Vandenberghe | CC BY 4.0 |
+| [C4, Explosive, Device](https://sketchfab.com/3d-models/c4-explosive-device-1136e57481274df78877d323cf7e730a) | Charlie Tinley | CC BY 4.0 |

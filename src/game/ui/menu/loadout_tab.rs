@@ -5,7 +5,8 @@ use super::{
     MenuPage, MenuTab, PlayerLoadout, WeaponId,
 };
 use crate::game::{
-    config::{BuyCategory, BUY_SLOT_COUNT, PRESET_ARMOR, PRESET_GRENADES},
+    config::{BuyCategory, BUY_SLOT_COUNT},
+    equipment::{self, EquipmentCategory, EquipmentItem},
     player::skins::PlayerSide,
     GameState,
 };
@@ -87,12 +88,20 @@ struct InventoryHeading;
 struct EmptyInventory;
 #[derive(Component)]
 struct LoadoutScroll;
+#[derive(Component)]
+struct EquipmentPreset(&'static EquipmentItem);
 
 impl Plugin for LoadoutTabPlugin {
     fn build(&self, app: &mut App) {
         if std::env::var_os("CSRS_CAPTURE").is_some()
             && std::env::var_os("CSRS_CAPTURE_LOADOUT").is_some()
         {
+            if std::env::var("CSRS_LOADOUT_SIDE").as_deref() == Ok("defender") {
+                app.insert_resource(LoadoutEditor {
+                    side: PlayerSide::Defender,
+                    ..default()
+                });
+            }
             app.add_systems(
                 OnEnter(GameState::MainMenu),
                 (|mut next: ResMut<NextState<MenuTab>>| next.set(MenuTab::LoadOut))
@@ -104,7 +113,7 @@ impl Plugin for LoadoutTabPlugin {
             .add_systems(Startup, (loadout_scene::setup_targets, setup).chain())
             .add_systems(
                 Update,
-                (interact, refresh, scroll)
+                (interact, refresh, refresh_presets, scroll)
                     .chain()
                     .run_if(in_state(GameState::MainMenu).and(in_state(MenuTab::LoadOut))),
             );
@@ -130,7 +139,7 @@ fn setup(mut commands: Commands, previews: Res<CharacterPreviews>, server: Res<A
             root.spawn(Node {
                 width: Val::Percent(100.),
                 height: Val::Vh(57.),
-                min_height: Val::Px(410.),
+                min_height: Val::Px(520.),
                 flex_shrink: 0.,
                 padding: UiRect::all(Val::VMin(2.)),
                 column_gap: Val::VMin(1.5),
@@ -160,12 +169,15 @@ fn setup(mut commands: Commands, previews: Res<CharacterPreviews>, server: Res<A
                             .with_children(|columns| {
                                 columns.spawn(column()).with_children(|equipment| {
                                     equipment.spawn(label("EQUIPMENT", 13., WHITE));
-                                    equipment.spawn(label("Armor · Fixed", 11., MUTED));
-                                    for name in PRESET_ARMOR {
-                                        spawn_preset(equipment, name);
+                                    equipment.spawn(label("Preset · Fixed", 11., MUTED));
+                                    for item in equipment::items().iter().filter(|item| {
+                                        item.category == EquipmentCategory::Equipment
+                                    }) {
+                                        spawn_preset(equipment, item, &server);
                                     }
                                     equipment.spawn(label("Knife · Both teams", 11., MUTED));
-                                    for knife in WeaponId::ALL.iter().copied().filter(|w| w.is_knife())
+                                    for knife in
+                                        WeaponId::ALL.iter().copied().filter(|w| w.is_knife())
                                     {
                                         equipment
                                             .spawn((
@@ -219,8 +231,11 @@ fn setup(mut commands: Commands, previews: Res<CharacterPreviews>, server: Res<A
                                 columns.spawn(column()).with_children(|grenades| {
                                     grenades.spawn(label("GRENADES", 13., WHITE));
                                     grenades.spawn(label("Preset · Fixed", 11., MUTED));
-                                    for name in PRESET_GRENADES {
-                                        spawn_preset(grenades, name);
+                                    for item in equipment::items()
+                                        .iter()
+                                        .filter(|item| item.category == EquipmentCategory::Grenade)
+                                    {
+                                        spawn_preset(grenades, item, &server);
                                     }
                                 });
                             });
@@ -355,16 +370,50 @@ fn cell() -> Node {
         ..default()
     }
 }
-fn spawn_preset(parent: &mut ChildSpawnerCommands, name: &str) {
-    // No Button or interaction component: armor and grenades cannot be edited.
+fn spawn_preset(
+    parent: &mut ChildSpawnerCommands,
+    item: &'static EquipmentItem,
+    server: &AssetServer,
+) {
     parent
         .spawn((
-            cell(),
+            EquipmentPreset(item),
+            Node {
+                min_height: Val::Px(32.),
+                flex_shrink: 0.,
+                padding: UiRect::all(Val::Px(3.)),
+                column_gap: Val::Px(4.),
+                align_items: AlignItems::Center,
+                border: UiRect::bottom(Val::Px(1.)),
+                ..default()
+            },
             BackgroundColor(Color::srgba(0.04, 0.06, 0.08, 0.12)),
             BorderColor(Color::srgba(1., 1., 1., 0.14)),
         ))
-        .with_child(label(name, 12., MUTED));
+        .with_children(|row| {
+            row.spawn((
+                ImageNode::new(server.load(item.icon.clone())),
+                Node {
+                    width: Val::Px(36.),
+                    height: Val::Px(27.),
+                    flex_shrink: 0.,
+                    ..default()
+                },
+            ));
+            row.spawn(label(&item.name, 11., MUTED));
+        });
 }
+
+fn refresh_presets(editor: Res<LoadoutEditor>, mut presets: Query<(&EquipmentPreset, &mut Node)>) {
+    for (preset, mut node) in &mut presets {
+        node.display = if preset.0.available_on(editor.side) {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+}
+
 fn spawn_side(parent: &mut ChildSpawnerCommands, previews: &CharacterPreviews, side: PlayerSide) {
     parent
         .spawn((
@@ -427,10 +476,12 @@ fn interact(
             LoadoutButton::Melee(knife) => loadout.melee_weapon = knife,
             LoadoutButton::Clear => {
                 let slot = editor.slot();
-                loadout
-                    .buy_weapons
-                    .side_mut(editor.side)
-                    .set(slot.category, slot.index, None, editor.side);
+                loadout.buy_weapons.side_mut(editor.side).set(
+                    slot.category,
+                    slot.index,
+                    None,
+                    editor.side,
+                );
             }
         }
     }

@@ -1,6 +1,6 @@
 use super::{style::*, MenuPage, MenuTab, PlayerLoadout, WeaponId};
 use crate::game::{
-    config::PRESET_GRENADES,
+    equipment::{self, EquipmentCategory, EquipmentItem},
     player::skins::{SkinId, SkinRegistry},
     GameState,
 };
@@ -19,6 +19,7 @@ enum Category {
     Weapons,
     Characters,
     Grenades,
+    Equipment,
 }
 
 #[derive(Component)]
@@ -33,6 +34,7 @@ struct InventoryScroll;
 enum Item {
     Weapon(WeaponId),
     Character(SkinId),
+    Equipment(&'static EquipmentItem),
 }
 
 impl Plugin for InventoryTabPlugin {
@@ -41,6 +43,11 @@ impl Plugin for InventoryTabPlugin {
         if std::env::var_os("CSRS_CAPTURE").is_some()
             && std::env::var_os("CSRS_CAPTURE_INVENTORY").is_some()
         {
+            app.insert_resource(match std::env::var("CSRS_INVENTORY_CATEGORY").as_deref() {
+                Ok("equipment") => Category::Equipment,
+                Ok("grenades") => Category::Grenades,
+                _ => Category::Everything,
+            });
             app.add_systems(
                 OnEnter(GameState::MainMenu),
                 (|mut next: ResMut<NextState<MenuTab>>| next.set(MenuTab::Inventory))
@@ -93,6 +100,7 @@ fn setup(mut commands: Commands, server: Res<AssetServer>, skins: Res<SkinRegist
                     (Category::Weapons, "WEAPONS"),
                     (Category::Characters, "CHARACTERS"),
                     (Category::Grenades, "GRENADES"),
+                    (Category::Equipment, "EQUIPMENT"),
                 ] {
                     tabs.spawn((
                         CategoryButton(category),
@@ -162,7 +170,21 @@ fn setup(mut commands: Commands, server: Res<AssetServer>, skins: Res<SkinRegist
                                 preview,
                             )
                         });
-                        for (item, category, name, subtitle, preview) in weapons.chain(characters) {
+                        let equipment = equipment::items().iter().map(|item| {
+                            (
+                                Item::Equipment(item),
+                                match item.category {
+                                    EquipmentCategory::Grenade => Category::Grenades,
+                                    EquipmentCategory::Equipment => Category::Equipment,
+                                },
+                                item.name.as_str(),
+                                item.subtitle(),
+                                item.icon.as_str(),
+                            )
+                        });
+                        for (item, category, name, subtitle, preview) in
+                            weapons.chain(characters).chain(equipment)
+                        {
                             grid.spawn((
                                 InventoryCard(category),
                                 Node {
@@ -201,37 +223,6 @@ fn setup(mut commands: Commands, server: Res<AssetServer>, skins: Res<SkinRegist
                                 card.spawn(label(name, 17., WHITE));
                                 card.spawn(label(subtitle, 13., MUTED));
                                 card.spawn((item, label("", 12., ACCENT)));
-                            });
-                        }
-                        for name in PRESET_GRENADES {
-                            grid.spawn((
-                                InventoryCard(Category::Grenades),
-                                Node {
-                                    width: Val::Px(200.),
-                                    max_width: Val::Percent(100.),
-                                    flex_direction: FlexDirection::Column,
-                                    row_gap: Val::Px(5.),
-                                    ..default()
-                                },
-                            ))
-                            .with_children(|card| {
-                                // Preset information only; no item model or edit action exists yet.
-                                card.spawn((
-                                    Node {
-                                        width: Val::Percent(100.),
-                                        aspect_ratio: Some(4. / 3.),
-                                        align_items: AlignItems::Center,
-                                        justify_content: JustifyContent::Center,
-                                        border: UiRect::bottom(Val::Px(3.)),
-                                        ..default()
-                                    },
-                                    BackgroundColor(Color::srgba(0.42, 0.45, 0.48, 0.74)),
-                                    BorderColor(Color::srgb(0.46, 0.63, 0.71)),
-                                ))
-                                .with_child(label("PRESET", 20., MUTED));
-                                card.spawn(label(name, 17., WHITE));
-                                card.spawn(label("Grenade · Fixed selection", 13., MUTED));
-                                card.spawn(label("Not customizable", 12., ACCENT));
                             });
                         }
                     });
@@ -298,11 +289,18 @@ fn filter(
 
 fn equipped(loadout: Res<PlayerLoadout>, mut labels: Query<(&Item, &mut Text)>) {
     for (item, mut text) in &mut labels {
+        if let Item::Equipment(equipment) = item {
+            if text.0 != equipment.status() {
+                **text = equipment.status().into();
+            }
+            continue;
+        }
         let active = match item {
             Item::Weapon(weapon) => {
                 *weapon == loadout.primary_weapon || *weapon == loadout.melee_weapon
             }
             Item::Character(skin) => *skin == loadout.selected_skin,
+            Item::Equipment(_) => unreachable!(),
         };
         let value = if active { "Equipped" } else { "Available" };
         if text.0 != value {

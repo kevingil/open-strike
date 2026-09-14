@@ -731,14 +731,6 @@ impl BuyCategory {
 }
 
 pub const BUY_SLOT_COUNT: usize = 5;
-pub const PRESET_ARMOR: [&str; 2] = ["Kevlar vest", "Kevlar + helmet"];
-pub const PRESET_GRENADES: [&str; 5] = [
-    "Flashbang",
-    "Smoke grenade",
-    "HE grenade",
-    "Incendiary grenade",
-    "Decoy grenade",
-];
 
 #[derive(Clone)]
 pub struct SideBuyLoadout {
