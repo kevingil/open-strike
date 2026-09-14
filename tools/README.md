@@ -361,7 +361,32 @@ To regenerate just the knife assets:
 ```
 
 Add `CSRS_REFERENCE_KNIFE=1` to the native knife capture command to inspect the
-reference blade, and `CSRS_TEAM=defender` to inspect Police. See
+reference blade, and `CSRS_TEAM=defender` to inspect Police.
+
+### Catalog knives in first person
+
+Knives without their own arms (Karambit, the CT/T knives and the stained/forest
+finishes) are held by the reference arms at runtime: `viewmodel.rs` hides the
+arms' authored blade and parents the catalog world GLB to the animated
+`KnifeGrip` socket with a per-knife grip transform. Idle, slash and draw reuse
+the reference clips. The karambit adds a draw flourish that spins the blade
+around its finger ring.
+
+To record a draw sequence as frames (rifle, knife draw, slash, rifle, draw):
+
+```sh
+CSRS_AUTOSTART=1 CSRS_DEMO=1 CSRS_DRAW_DEMO=1 CSRS_MELEE=karambit CSRS_MODE=free \
+CSRS_CAPTURE=/tmp/draw/final.png CSRS_FIXED_STEP=30 CSRS_FRAME_CAPTURE=/tmp/draw \
+CSRS_FRAME_RANGE=0.5,9.0 CSRS_EXIT_AFTER=26 cargo run --locked --bin open-strike
+ffmpeg -framerate 30 -i /tmp/draw/frame-%05d.png -pix_fmt yuv420p draw.mp4
+```
+
+`CSRS_MELEE=<knife key>` selects any knife, `CSRS_MODE=free|dm|tdm` overrides
+the match mode, `CSRS_FIXED_STEP=<fps>` advances time by exactly one frame per
+render so software rasterizers produce steady playback, and
+`CSRS_FRAME_CAPTURE` saves every frame inside `CSRS_FRAME_RANGE` (match
+seconds). `CSRS_EXIT_AFTER` counts fixed-step frames too, so leave room for
+map loading. See
 [asset licensing and provenance](../ASSET_LICENSES.md) for attribution and modifications.
 
 ### Inventory equipment models

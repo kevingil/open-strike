@@ -17,6 +17,14 @@ use bevy_fps_controller::controller::RenderPlayer;
 
 // Stretch the native 1.33-second holding loop to four seconds.
 const KNIFE_IDLE_SPEED: f32 = 1.0 / 3.0;
+/// The reference arms' knife socket and the blade it was authored with.
+const KNIFE_SOCKET: &str = "KnifeGrip";
+const REFERENCE_BLADE: &str = "knife_knife_0";
+/// Karambit draw: two turns around the finger ring, easing out.
+const KARAMBIT_SPIN_SECONDS: f32 = 0.55;
+const KARAMBIT_SPIN_TURNS: f32 = 2.0;
+/// Ring centre in the catalog karambit's own metres (blade on +Y, ring on -Y).
+const KARAMBIT_RING: Vec3 = Vec3::new(0.0, -0.11, -0.03);
 
 #[derive(Component)]
 pub struct ViewModel {
@@ -33,9 +41,22 @@ pub struct ViewModel {
     nodes: Vec<AnimationNodeIndex>,
     reload_duration: f32,
     slash_duration: f32,
+    /// Catalog blade attached to the reference arms' knife socket.
+    attachment: Option<Handle<Gltf>>,
 }
 #[derive(Component)]
 pub struct LayersBound;
+/// A catalog knife parented to the first-person arms' `KnifeGrip` socket.
+#[derive(Component)]
+pub struct KnifeAttachment {
+    actor: Entity,
+    weapon_id: WeaponId,
+    grip: Transform,
+    last_equip: u64,
+    spin_elapsed: f32,
+}
+#[derive(Component)]
+pub struct AttachmentBound;
 #[derive(Component)]
 pub struct WorldWeapon;
 #[derive(Component)]
@@ -107,7 +128,7 @@ pub fn animate_flashes(
 
 /// Framing is independent of world FOV and hit-query origins.
 fn profile(id: WeaponId) -> Transform {
-    if id.is_knife() && id.has_viewmodel() {
+    if id.is_knife() {
         // Native reference centimetres, viewed from (0, 10, 32) in Blender.
         let tilt = Quat::from_rotation_x((13.0_f32 / 40.0).atan());
         Transform {
@@ -115,11 +136,6 @@ fn profile(id: WeaponId) -> Transform {
             rotation: tilt * Quat::from_rotation_y(std::f32::consts::PI),
             scale: Vec3::splat(0.01),
         }
-    } else if id.is_knife() {
-        Transform::from_xyz(0.16, -0.18, -0.32).with_rotation(
-            Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
-                * Quat::from_rotation_y(std::f32::consts::PI),
-        )
     } else if id.has_viewmodel() {
         // The AKM reference rig is authored in source units around its camera.
         Transform::from_xyz(-0.005, -0.05, 0.0)
@@ -137,6 +153,57 @@ fn profile(id: WeaponId) -> Transform {
     }
 }
 
+/// Every knife is held by the reference arms; only the AK has its own rig.
+fn has_arms(id: WeaponId) -> bool {
+    id == WeaponId::AK47 || id.is_knife()
+}
+
+/// The first-person scene for a weapon: dedicated arms where they exist,
+/// the reference knife arms for every other knife, and the bare world
+/// model for catalog guns.
+fn arms_handle(assets: &GameAssets, id: WeaponId, skin_index: usize) -> &Handle<Gltf> {
+    match id {
+        WeaponId::AK47 => &assets.arms[skin_index],
+        WeaponId::DefaultKnife => &assets.knife_view[skin_index],
+        WeaponId::ReferenceKnife => &assets.reference_knife_view[skin_index],
+        other if other.is_knife() => &assets.reference_knife_view[skin_index],
+        other => assets.world(other),
+    }
+}
+
+/// Blade placed in the reference arms' `KnifeGrip` socket, in the socket's
+/// native centimetres. The reference blade points along +Y with its flat on
+/// Z, and the fist closes around roughly y = -7 .. 0.
+fn knife_grip(id: WeaponId) -> Option<Transform> {
+    use std::f32::consts::{FRAC_PI_2, PI};
+    match id {
+        WeaponId::Karambit => Some(
+            // Forward grip: the ring hangs off the little-finger end of the
+            // fist, the handle fills the fingers and the blade rises past the
+            // thumb with its hook curving toward the camera. The reverse grip
+            // would run the blade along the forearm, hidden behind the sleeve
+            // in this rig's pose. Scaled to a hand-sized 22 cm knife.
+            Transform::from_xyz(0.0, 3.2, -3.1)
+                .with_rotation(
+                    Quat::from_rotation_x(12_f32.to_radians()) * Quat::from_rotation_y(PI),
+                )
+                .with_scale(Vec3::splat(70.0)),
+        ),
+        WeaponId::DefaultKnifeCt | WeaponId::DefaultKnifeT => Some(
+            // Catalog knives already point +Y with the flat on Z; slide the
+            // handle into the fist.
+            Transform::from_xyz(0.0, 5.5, 0.0).with_scale(Vec3::splat(100.0)),
+        ),
+        WeaponId::DefaultKnifeStained | WeaponId::DefaultKnifeForest => Some(
+            // The authored knife points -Z with its flat on Y.
+            Transform::from_xyz(0.0, -3.5, 0.0)
+                .with_rotation(Quat::from_rotation_y(FRAC_PI_2) * Quat::from_rotation_x(FRAC_PI_2))
+                .with_scale(Vec3::splat(80.0)),
+        ),
+        _ => None,
+    }
+}
+
 pub fn spawn(
     commands: &mut Commands,
     assets: &GameAssets,
@@ -151,12 +218,7 @@ pub fn spawn(
     };
     let mut roots = Vec::new();
     for weapon_id in WeaponId::all() {
-        let handle = match weapon_id {
-            WeaponId::AK47 => &assets.arms[skin_index],
-            WeaponId::DefaultKnife => &assets.knife_view[skin_index],
-            WeaponId::ReferenceKnife => &assets.reference_knife_view[skin_index],
-            other => assets.world(other),
-        };
+        let handle = arms_handle(assets, weapon_id, skin_index);
         let framing = profile(weapon_id);
         roots.push(
             commands
@@ -177,6 +239,7 @@ pub fn spawn(
                         nodes: Vec::new(),
                         reload_duration: 0.0,
                         slash_duration: 0.0,
+                        attachment: knife_grip(weapon_id).map(|_| assets.world(weapon_id).clone()),
                     },
                     Visibility::Hidden,
                 ))
@@ -264,7 +327,9 @@ pub fn bind_scenes(
                 let wanted = WeaponId::ALL
                     .into_iter()
                     .filter(|weapon_id| showcase.is_none() || *weapon_id == WeaponId::AK47);
-                if wanted.clone().any(|weapon_id| gltfs.get(assets.world(weapon_id)).is_none())
+                if wanted
+                    .clone()
+                    .any(|weapon_id| gltfs.get(assets.world(weapon_id)).is_none())
                 {
                     break;
                 }
@@ -294,6 +359,7 @@ pub fn bind_scenes(
                             nodes: Vec::new(),
                             reload_duration: 0.0,
                             slash_duration: 0.0,
+                            attachment: None,
                         },
                         if showcase.is_some() {
                             Visibility::Inherited
@@ -322,28 +388,27 @@ pub fn bind_scenes(
             }
             continue;
         }
-        let handle = match (model.weapon_id, model.first_person) {
-            (WeaponId::AK47, true) => &assets.arms[model.skin_index],
-            (WeaponId::DefaultKnife, true) => &assets.knife_view[model.skin_index],
-            (WeaponId::ReferenceKnife, true) => &assets.reference_knife_view[model.skin_index],
-            (id, _) => assets.world(id),
+        let handle = if model.first_person {
+            arms_handle(&assets, model.weapon_id, model.skin_index)
+        } else {
+            assets.world(model.weapon_id)
         };
         let Some(gltf) = gltfs.get(handle) else {
             continue;
         };
-        if !model.weapon_id.has_viewmodel() {
+        if !has_arms(model.weapon_id) {
             commands.entity(root).insert((
                 RenderLayers::layer(if model.first_person { 1 } else { 0 }),
                 LayersBound,
             ));
             continue;
         }
-        let names = if model.weapon_id == WeaponId::AK47 {
+        let clip_names = if model.weapon_id == WeaponId::AK47 {
             ["idle_rifle", "fire_rifle", "reload_rifle"]
         } else {
             ["idle_knife", "slash_knife", "draw_knife"]
         };
-        let Some(clips) = names
+        let Some(clips) = clip_names
             .iter()
             .map(|name| gltf.named_animations.get(*name).cloned())
             .collect::<Option<Vec<_>>>()
@@ -364,6 +429,40 @@ pub fn bind_scenes(
             .get(&clips[2])
             .map(AnimationClip::duration)
             .unwrap_or(0.0);
+        if let Some(attachment) = model.attachment.clone() {
+            let Some(asset) = gltfs.get(&attachment) else {
+                continue;
+            };
+            let Some(socket) = descendants
+                .iter_descendants(root)
+                .find(|e| names.get(*e).is_ok_and(|n| n.as_str() == KNIFE_SOCKET))
+            else {
+                continue;
+            };
+            // The arms keep their authored blade; hide it and hang the
+            // catalog knife from the same animated socket.
+            for entity in descendants.iter_descendants(root) {
+                if names
+                    .get(entity)
+                    .is_ok_and(|n| n.as_str() == REFERENCE_BLADE)
+                {
+                    commands.entity(entity).insert(Visibility::Hidden);
+                }
+            }
+            let grip = knife_grip(model.weapon_id).unwrap_or_default();
+            commands.entity(socket).with_child((
+                SceneRoot(asset.scenes[0].clone()),
+                grip,
+                KnifeAttachment {
+                    actor: model.actor,
+                    weapon_id: model.weapon_id,
+                    grip,
+                    last_equip: 0,
+                    spin_elapsed: KARAMBIT_SPIN_SECONDS,
+                },
+                RenderLayers::layer(1),
+            ));
+        }
         let (graph, nodes) = AnimationGraph::from_clips(clips);
         let mut transitions = AnimationTransitions::new();
         if let Ok(mut animation) = players.get_mut(player) {
@@ -399,6 +498,66 @@ pub fn bind_scenes(
         model.nodes = nodes;
     }
 }
+/// Attached blades spawn after their arms; give every node the arms' layer.
+pub fn bind_attachments(
+    mut commands: Commands,
+    attachments: Query<Entity, (With<KnifeAttachment>, Without<AttachmentBound>)>,
+    descendants: Query<&Children>,
+) {
+    for root in &attachments {
+        if descendants.iter_descendants(root).next().is_none() {
+            continue;
+        }
+        for entity in descendants.iter_descendants(root) {
+            commands
+                .entity(entity)
+                .insert((RenderLayers::layer(1), bevy::render::view::NoFrustumCulling));
+        }
+        commands.entity(root).insert(AttachmentBound);
+    }
+}
+
+/// Draw flourish for attached blades. The karambit spins around its finger
+/// ring while the arms play their draw clip; other knives simply ride the
+/// socket.
+pub fn animate_attachments(
+    time: Res<Time>,
+    weapons: Query<&WeaponState>,
+    mut attachments: Query<(&mut KnifeAttachment, &mut Transform)>,
+) {
+    for (mut attachment, mut transform) in &mut attachments {
+        let Ok(weapon) = weapons.get(attachment.actor) else {
+            continue;
+        };
+        if attachment.weapon_id != WeaponId::Karambit {
+            continue;
+        }
+        if attachment.last_equip != weapon.equips {
+            attachment.last_equip = weapon.equips;
+            attachment.spin_elapsed = if weapon.active == attachment.weapon_id {
+                0.0
+            } else {
+                KARAMBIT_SPIN_SECONDS
+            };
+        }
+        if attachment.spin_elapsed >= KARAMBIT_SPIN_SECONDS {
+            *transform = attachment.grip;
+            continue;
+        }
+        attachment.spin_elapsed =
+            (attachment.spin_elapsed + time.delta_secs()).min(KARAMBIT_SPIN_SECONDS);
+        let progress = attachment.spin_elapsed / KARAMBIT_SPIN_SECONDS;
+        let eased = 1.0 - (1.0 - progress).powi(3);
+        let angle = eased * KARAMBIT_SPIN_TURNS * std::f32::consts::TAU;
+        // Spin about the ring's axis (the blade's thin X axis) so the ring
+        // stays on the finger and the handle whips around it.
+        *transform = attachment.grip
+            * Transform::from_translation(KARAMBIT_RING)
+            * Transform::from_rotation(Quat::from_rotation_x(angle))
+            * Transform::from_translation(-KARAMBIT_RING);
+    }
+}
+
 pub fn animate_viewmodel(
     mut models: Query<(
         &mut ViewModel,

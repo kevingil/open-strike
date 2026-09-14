@@ -48,6 +48,21 @@ impl Plugin for DebugPlugin {
         if std::env::var_os("CSRS_ONLINE_SCENARIO").is_some() {
             app.add_plugins(crate::game::hub::scenario::ScenarioPlugin);
         }
+        if std::env::var_os("CSRS_FRAME_CAPTURE").is_some() {
+            app.add_systems(Update, capture_frames.run_if(in_state(GameState::Playing)));
+        }
+        if let Some(fps) = std::env::var("CSRS_FIXED_STEP")
+            .ok()
+            .and_then(|s| s.parse::<f64>().ok())
+            .filter(|fps| *fps > 0.0)
+        {
+            // Advance simulation time by exactly one frame per render so
+            // captured frame sequences play back at a steady rate whatever
+            // the software rasterizer manages.
+            app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f64(1.0 / fps),
+            ));
+        }
         if std::env::var_os("CSRS_CAPTURE_KILLS").is_some() {
             app.add_systems(Update, capture_kills.run_if(in_state(GameState::Playing)));
         }
@@ -201,6 +216,20 @@ fn demo(
     } else {
         4.5
     };
+    if std::env::var_os("CSRS_DRAW_DEMO").is_some() {
+        use crate::game::{config::WeaponId, weapons::WeaponSelection};
+        // Start on the rifle, draw the knife, slash, put it away and draw again.
+        intent.selection = Some(WeaponSelection::Select(
+            if (1.0..5.0).contains(&t) || t >= 6.5 {
+                WeaponId::DefaultKnife
+            } else {
+                WeaponId::AK47
+            },
+        ));
+        intent.fire = (3.0..3.15).contains(&t);
+        intent.reload = false;
+        return;
+    }
     if std::env::var_os("CSRS_KNIFE_DEMO").is_some() {
         use crate::game::{config::WeaponId, weapons::WeaponSelection};
         intent.selection = Some(WeaponSelection::Select(if t < 4.0 || t >= 7.0 {
@@ -233,6 +262,12 @@ fn configure(
             }
         }
     }
+    if let Some(mode) = std::env::var("CSRS_MODE")
+        .ok()
+        .and_then(|key| crate::game::config::GameMode::from_key(&key))
+    {
+        config.mode = mode;
+    }
     if let Ok(seconds) = std::env::var("CSRS_MATCH_SECONDS") {
         config.match_settings.time_limit = seconds
             .parse::<u64>()
@@ -244,6 +279,13 @@ fn configure(
     }
     if std::env::var_os("CSRS_REFERENCE_KNIFE").is_some() {
         loadout.melee_weapon = crate::game::config::WeaponId::ReferenceKnife;
+    }
+    if let Some(knife) = std::env::var("CSRS_MELEE")
+        .ok()
+        .and_then(|key| crate::game::config::WeaponId::from_key(&key))
+        .filter(|weapon| weapon.is_knife())
+    {
+        loadout.melee_weapon = knife;
     }
     if std::env::var("CSRS_TEAM").is_ok_and(|s| s == "defender") {
         loadout.selected_skin = crate::game::player::skins::SkinId::Police;
@@ -479,6 +521,30 @@ fn capture_weapon_phases(
         }
         *phase += 1;
     }
+}
+
+/// Save every rendered frame inside `CSRS_FRAME_RANGE` (match seconds,
+/// `start,end`) to `CSRS_FRAME_CAPTURE/frame-NNNNN.png` for stitching into video.
+fn capture_frames(
+    mut commands: Commands,
+    session: Res<crate::game::matchplay::MatchSession>,
+    mut index: Local<u32>,
+) {
+    let directory = std::env::var("CSRS_FRAME_CAPTURE").unwrap();
+    let (start, end) = std::env::var("CSRS_FRAME_RANGE")
+        .ok()
+        .and_then(|range| {
+            let (a, b) = range.split_once(',')?;
+            Some((a.parse().ok()?, b.parse().ok()?))
+        })
+        .unwrap_or((0.0_f32, 10.0_f32));
+    if session.elapsed < start || session.elapsed > end {
+        return;
+    }
+    commands
+        .spawn(Screenshot::primary_window())
+        .observe(save_to_disk(format!("{directory}/frame-{:05}.png", *index)));
+    *index += 1;
 }
 
 /// Capture real kill events after the HUD has received them; never synthesize scores.
