@@ -29,11 +29,5 @@ crates/strike-hub/hub.db-*
 *.rar
 # Full unprocessed Mirage source (~300MB). Export writes the playable GLB.
 /assets/maps/de_mirage/merged_model.glb
-# Authoring sources over GitHub's 100MB blob limit. Playable outputs stay in Git.
-/assets/maps/de_dust_2/de_dust_2.blend
-/assets/models/skins/defense_default_skin.glb
-/assets/models/skins/defender.blend
-/assets/models/skins/shooter.blend
-*.blend1
 # Downloaded Sketchfab catalog sources.
 /assets/models/catalog/
