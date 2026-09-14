@@ -1,0 +1,474 @@
+{
+  "sources": {
+    "flashbang": {
+      "path": "assets/models/catalog/flashbang/m84_stun_grenade_flashbang.glb",
+      "uid": "3dbda8fe68ff4efdbf59f7d414c5619c",
+      "author": "Vanillatography",
+      "title": "M84 Stun Grenade Flashbang",
+      "url": "https://sketchfab.com/3d-models/3dbda8fe68ff4efdbf59f7d414c5619c",
+      "sha256": "627bf730c4e7f0a183da5b9fd2ea84f4b3876ef71f4cb18bf915f6396f86edcc",
+      "asset_metadata": {
+        "extras": {
+          "author": "Vanillatography (https://sketchfab.com/vanillatography)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/m84-stun-grenade-flashbang-3dbda8fe68ff4efdbf59f7d414c5619c",
+          "title": "M84 Stun Grenade \"Flashbang\""
+        },
+        "generator": "Sketchfab-13.6.0",
+        "version": "2.0"
+      },
+      "height": 0.15,
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "meshes": [
+        "OuterCylinder_low.001_StunGrenade_0",
+        "InnerCylinder_low.001_StunGrenade_0",
+        "FuseBody_low.001_StunGrenade_0",
+        "SafetyLever_low.001_StunGrenade_0",
+        "Split_low.001_StunGrenade_0",
+        "PinConnect_low.001_StunGrenade_0",
+        "Cylinder_low.001_StunGrenade_0",
+        "Lids_low.001_StunGrenade_0",
+        "SafetyLeverBump_low.001_StunGrenade_0",
+        "Pin_low.001_StunGrenade_0"
+      ]
+    },
+    "smoke": {
+      "path": "assets/models/catalog/smoke/m18_smoke_grenade.glb",
+      "uid": "46343925ad0e47cf927e66da7953c372",
+      "author": "Vanillatography",
+      "title": "M18 Smoke Grenade",
+      "url": "https://sketchfab.com/3d-models/46343925ad0e47cf927e66da7953c372",
+      "sha256": "6d26099553dcc99e2a3bdc1ffe8535e55bc6c37589b2b1e81e807e02e6de22e1",
+      "asset_metadata": {
+        "extras": {
+          "author": "Vanillatography (https://sketchfab.com/vanillatography)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/m18-smoke-grenade-46343925ad0e47cf927e66da7953c372",
+          "title": "M18 Smoke Grenade"
+        },
+        "generator": "Sketchfab-13.4.0",
+        "version": "2.0"
+      },
+      "height": 0.15,
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "meshes": [
+        "SM_SmokeGrenade_PainterExport_SmokeGrenade_0"
+      ]
+    },
+    "he_grenade": {
+      "path": "assets/models/catalog/he_grenade/m67_grenade.glb",
+      "uid": "d202644dfaf441a0a145befbd7add45a",
+      "author": "Tiago Lopes",
+      "title": "M67 GRENADE",
+      "url": "https://sketchfab.com/3d-models/d202644dfaf441a0a145befbd7add45a",
+      "sha256": "c766a02fa8f44fab6f69701bae5caa0a531e8b50e9ea9c25f75710011066acb4",
+      "asset_metadata": {
+        "extras": {
+          "author": "Tiago Lopes (https://sketchfab.com/drobluda)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/m67-grenade-d202644dfaf441a0a145befbd7add45a",
+          "title": "M67 GRENADE"
+        },
+        "generator": "Sketchfab-12.59.0",
+        "version": "2.0"
+      },
+      "height": 0.095,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "incendiary": {
+      "path": "assets/models/catalog/incendiary/molotov_cocktail.glb",
+      "uid": "e57a0fd669974a3dab7d3919bda9032c",
+      "author": "LiliumLetifer",
+      "title": "Molotov Cocktail",
+      "url": "https://sketchfab.com/3d-models/e57a0fd669974a3dab7d3919bda9032c",
+      "sha256": "46f4f92cd5045cf85849499be603f1f23d742a061b2b59f742a30d30419c6fa0",
+      "asset_metadata": {
+        "extras": {
+          "author": "LiliumLetifer (https://sketchfab.com/LiliumLetifer)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/molotov-cocktail-e57a0fd669974a3dab7d3919bda9032c",
+          "title": "Molotov Cocktail"
+        },
+        "generator": "Sketchfab-15.3.0",
+        "version": "2.0"
+      },
+      "height": 0.3,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "decoy": {
+      "path": "assets/models/catalog/decoy/stun_grenade_mod._7290-t.glb",
+      "uid": "89dee6ff8bb841198791d7107bd38916",
+      "author": "Javier Clemente García",
+      "title": "Stun grenade Mod. 7290-T",
+      "url": "https://sketchfab.com/3d-models/89dee6ff8bb841198791d7107bd38916",
+      "sha256": "6fd645132156710e64cea48a67c039a58981404d913840684dc9b0050a581252",
+      "asset_metadata": {
+        "extras": {
+          "author": "Javier Clemente García (https://sketchfab.com/elgeosprods)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/stun-grenade-mod-7290-t-89dee6ff8bb841198791d7107bd38916",
+          "title": "\"Stun\" grenade Mod. 7290-T"
+        },
+        "generator": "Sketchfab-14.32.1",
+        "version": "2.0"
+      },
+      "height": 0.13,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "kevlar": {
+      "path": "assets/models/catalog/kevlar/tactical_plate_carrier_vest_-_game_ready.glb",
+      "uid": "3b51e6329dbb4b0aa14e43f12eb6c42a",
+      "author": "Exactly",
+      "title": "Tactical Plate Carrier Vest",
+      "url": "https://sketchfab.com/3d-models/3b51e6329dbb4b0aa14e43f12eb6c42a",
+      "sha256": "83dbd21dc377f69265cbcd0cf464ff3ae8997df14c3d1fd233dfa38aa8acb9a5",
+      "asset_metadata": {
+        "extras": {
+          "author": "Exactly (https://sketchfab.com/txyrm70)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/tactical-plate-carrier-vest-game-ready-3b51e6329dbb4b0aa14e43f12eb6c42a",
+          "title": "Tactical Plate Carrier Vest - Game Ready"
+        },
+        "generator": "Sketchfab-17.19.0",
+        "version": "2.0"
+      },
+      "height": 0.5,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "helmet": {
+      "path": "assets/models/catalog/helmet/ach_advanced_combat_helmet_lowpoly_game_ready.glb",
+      "uid": "3ed4db6157194c1c9021ae2dd9af74b6",
+      "author": "Armored Wave",
+      "title": "ACH",
+      "url": "https://sketchfab.com/3d-models/3ed4db6157194c1c9021ae2dd9af74b6",
+      "sha256": "45d3f786c1419634d0a06449ebed094c4d6ab6f14e665b14d51f865b2c0fe97c",
+      "asset_metadata": {
+        "extras": {
+          "author": "Armored Wave (https://sketchfab.com/armoredwave)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/ach-advanced-combat-helmet-lowpoly-game-ready-3ed4db6157194c1c9021ae2dd9af74b6",
+          "title": "ACH (Advanced Combat Helmet) LowPoly, Game ready"
+        },
+        "generator": "Sketchfab-14.10.0",
+        "version": "2.0"
+      },
+      "height": 0.25,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "zeus": {
+      "path": "assets/models/catalog/zeus/yellow_taser_gun.glb",
+      "uid": "0044ade7b6344c009405c43c110bb8fa",
+      "author": "Richard Speight",
+      "title": "Yellow Taser Gun",
+      "url": "https://sketchfab.com/3d-models/0044ade7b6344c009405c43c110bb8fa",
+      "sha256": "8ebb798412d6434fe011443e61000631c3c213e49578d710c08695c9ea9cd82c",
+      "asset_metadata": {
+        "extras": {
+          "author": "Richard Speight (https://sketchfab.com/richardsp8.2)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/yellow-taser-gun-0044ade7b6344c009405c43c110bb8fa",
+          "title": "Yellow Taser Gun"
+        },
+        "generator": "Sketchfab-15.30.0",
+        "version": "2.0"
+      },
+      "height": 0.15,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "defuse_kit": {
+      "path": "assets/models/catalog/defuse_kit/wire_cutter.glb",
+      "uid": "20467a9af8b5415089c1b359d4253dab",
+      "author": "Robin Vandenberghe",
+      "title": "Wire Cutter",
+      "url": "https://sketchfab.com/3d-models/20467a9af8b5415089c1b359d4253dab",
+      "sha256": "aabd2cc29359185ac28ba833999fa6490a3f3fac1a1704f6e56001c3ed431e42",
+      "asset_metadata": {
+        "extras": {
+          "author": "Robin Vandenberghe (https://sketchfab.com/RobinVandenberghe)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/wire-cutter-20467a9af8b5415089c1b359d4253dab",
+          "title": "Wire Cutter"
+        },
+        "generator": "Sketchfab-12.64.0",
+        "version": "2.0"
+      },
+      "height": 0.18,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "bomb": {
+      "path": "assets/models/catalog/bomb/c4_explosive_device.glb",
+      "uid": "1136e57481274df78877d323cf7e730a",
+      "author": "Charlie Tinley",
+      "title": "C4, Explosive, Device",
+      "url": "https://sketchfab.com/3d-models/1136e57481274df78877d323cf7e730a",
+      "sha256": "35cefe36f7f30ce26ca6d8828d0cb7c53ee7fc588c606d4e6dd527c8a9087d26",
+      "asset_metadata": {
+        "extras": {
+          "author": "Charlie Tinley (https://sketchfab.com/Tnkii)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/c4-explosive-device-1136e57481274df78877d323cf7e730a",
+          "title": "C4, Explosive, Device"
+        },
+        "generator": "Sketchfab-12.66.0",
+        "version": "2.0"
+      },
+      "height": 0.22,
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "items": [
+    {
+      "key": "flashbang",
+      "name": "Flashbang",
+      "category": "grenade",
+      "side": "both",
+      "icon": "generated/ui/inventory/flashbang.png",
+      "model": "generated/equipment/flashbang.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "flashbang",
+          "offset": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "key": "smoke",
+      "name": "Smoke grenade",
+      "category": "grenade",
+      "side": "both",
+      "icon": "generated/ui/inventory/smoke.png",
+      "model": "generated/equipment/smoke.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "smoke",
+          "offset": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "key": "he_grenade",
+      "name": "HE grenade",
+      "category": "grenade",
+      "side": "both",
+      "icon": "generated/ui/inventory/he_grenade.png",
+      "model": "generated/equipment/he_grenade.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "he_grenade",
+          "offset": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "key": "incendiary",
+      "name": "Incendiary grenade",
+      "category": "grenade",
+      "side": "both",
+      "icon": "generated/ui/inventory/incendiary.png",
+      "model": "generated/equipment/incendiary.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "incendiary",
+          "offset": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "key": "decoy",
+      "name": "Decoy grenade",
+      "category": "grenade",
+      "side": "both",
+      "icon": "generated/ui/inventory/decoy.png",
+      "model": "generated/equipment/decoy.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "decoy",
+          "offset": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "key": "kevlar",
+      "name": "Kevlar vest",
+      "category": "equipment",
+      "side": "both",
+      "icon": "generated/ui/inventory/kevlar.png",
+      "model": "generated/equipment/kevlar.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "kevlar",
+          "offset": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "camera": [
+        2,
+        -0.6,
+        0.6
+      ]
+    },
+    {
+      "key": "kevlar_helmet",
+      "name": "Kevlar + helmet",
+      "category": "equipment",
+      "side": "both",
+      "icon": "generated/ui/inventory/kevlar_helmet.png",
+      "model": "generated/equipment/kevlar_helmet.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "kevlar",
+          "offset": [
+            0,
+            0,
+            -0.12
+          ]
+        },
+        {
+          "source": "helmet",
+          "offset": [
+            0,
+            0,
+            0.28
+          ]
+        }
+      ],
+      "camera": [
+        2,
+        -0.6,
+        0.6
+      ]
+    },
+    {
+      "key": "zeus",
+      "name": "Zeus",
+      "category": "equipment",
+      "side": "both",
+      "icon": "generated/ui/inventory/zeus.png",
+      "model": "generated/equipment/zeus.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "zeus",
+          "offset": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "key": "defuse_kit",
+      "name": "Defuse kit",
+      "category": "equipment",
+      "side": "defender",
+      "icon": "generated/ui/inventory/defuse_kit.png",
+      "model": "generated/equipment/defuse_kit.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "defuse_kit",
+          "offset": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "key": "bomb",
+      "name": "Bomb",
+      "category": "equipment",
+      "side": "attacker",
+      "icon": "generated/ui/inventory/bomb.png",
+      "model": "generated/equipment/bomb.glb",
+      "character_attachment": false,
+      "parts": [
+        {
+          "source": "bomb",
+          "offset": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "camera": [
+        2,
+        -0.6,
+        1.4
+      ]
+    }
+  ]
+}
