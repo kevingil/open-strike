@@ -236,6 +236,7 @@ pub fn simulate_weapons(
         }
         shots.write(ShotFired {
             actor: entity,
+            weapon: weapon.active,
             origin: muzzle,
             end,
         });

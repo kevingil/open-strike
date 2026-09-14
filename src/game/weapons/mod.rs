@@ -1,6 +1,7 @@
 use crate::game::{config::WeaponId, game::SimulationSet, matchplay::ActorIntent, GameState};
 use bevy::prelude::*;
 pub mod audio;
+mod audio_bindings;
 pub mod combat;
 pub mod viewmodel;
 
@@ -392,6 +393,7 @@ impl WeaponState {
 #[derive(Event)]
 pub struct ShotFired {
     pub actor: Entity,
+    pub weapon: WeaponId,
     pub origin: Vec3,
     pub end: Vec3,
 }
