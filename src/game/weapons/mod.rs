@@ -330,6 +330,7 @@ pub enum WeaponSelection {
 }
 pub struct KnifeDefinition {
     pub range: f32,
+    pub sweep_radius: f32,
     pub damage: f32,
     pub windup: f32,
     pub recovery: f32,
@@ -337,6 +338,7 @@ pub struct KnifeDefinition {
 }
 pub const KNIFE: KnifeDefinition = KnifeDefinition {
     range: 1.5,
+    sweep_radius: 0.20,
     damage: 40.0,
     windup: 0.15,
     recovery: 0.40,

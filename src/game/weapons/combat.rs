@@ -102,11 +102,15 @@ pub fn simulate_weapons(
                         }
                         !living.iter().any(|(e, _, _)| *e == hit)
                     };
-                    if let Some((hit, _)) = physics.cast_ray(
+                    // Sweep the blade's volume so close slashes do not require
+                    // a pixel-perfect ray through the head/torso hit zones.
+                    // Include level geometry: the nearest wall still stops it.
+                    if let Some((hit, _)) = physics.cast_shape(
                         origin,
+                        Quat::IDENTITY,
                         rotation * -Vec3::Z,
-                        KNIFE.range,
-                        true,
+                        &Collider::ball(KNIFE.sweep_radius),
+                        ShapeCastOptions::with_max_time_of_impact(KNIFE.range - KNIFE.sweep_radius),
                         QueryFilter::default()
                             .exclude_rigid_body(entity)
                             .predicate(&predicate),
