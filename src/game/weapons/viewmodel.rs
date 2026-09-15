@@ -138,8 +138,14 @@ fn profile(id: WeaponId) -> Transform {
         } else {
             0.0
         });
+        // Frame the karambit lower and nearer the centre, like its reference.
+        let offset = if id == WeaponId::Karambit {
+            Vec3::new(-0.03, -0.035, 0.0)
+        } else {
+            Vec3::ZERO
+        };
         Transform {
-            translation: yaw * (tilt * Vec3::new(0.0, -0.32, -0.10) + Vec3::Y * 0.075),
+            translation: yaw * (tilt * Vec3::new(0.0, -0.32, -0.10) + Vec3::Y * 0.075) + offset,
             rotation: yaw * tilt * Quat::from_rotation_y(std::f32::consts::PI),
             scale: Vec3::splat(0.01),
         }
@@ -189,9 +195,9 @@ fn knife_grip(id: WeaponId) -> Option<Transform> {
             // fist and the blade leaves the little-finger side, angled up across
             // the fist so it clears the sleeve, with the hook curving back down
             // at the tip. Scaled to a hand-sized 22 cm knife.
-            Transform::from_xyz(-6.0, 1.6, -3.6)
+            Transform::from_xyz(-6.0, 3.0, -3.6)
                 .with_rotation(
-                    Quat::from_rotation_z(135_f32.to_radians()) * Quat::from_rotation_y(PI),
+                    Quat::from_rotation_z(120_f32.to_radians()) * Quat::from_rotation_y(PI),
                 )
                 .with_scale(Vec3::splat(70.0)),
         ),
