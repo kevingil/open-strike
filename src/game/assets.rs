@@ -10,6 +10,7 @@ pub struct GameAssets {
     pub knife_view: [Handle<Gltf>; 2],
     pub knife_world: Handle<Gltf>,
     pub reference_knife_view: [Handle<Gltf>; 2],
+    pub karambit_view: [Handle<Gltf>; 2],
     pub reference_knife_world: Handle<Gltf>,
     pub knife_poses: [Handle<Gltf>; 2],
     pub worlds: HashMap<WeaponId, Handle<Gltf>>,
@@ -60,6 +61,10 @@ pub fn load_assets(
             load("generated/reference_knife_view_police.glb"),
         ],
         reference_knife_world: load("generated/reference_knife_world.glb"),
+        karambit_view: [
+            load("generated/karambit_view_soldier.glb"),
+            load("generated/karambit_view_police.glb"),
+        ],
         knife_poses: [
             load("generated/knife_pose_attacker.glb"),
             load("generated/knife_pose_defender.glb"),
@@ -76,6 +81,16 @@ pub fn load_assets(
     });
 }
 impl GameAssets {
+    pub fn view(&self, id: WeaponId, skin_index: usize) -> &Handle<Gltf> {
+        match id {
+            WeaponId::AK47 => &self.arms[skin_index],
+            WeaponId::DefaultKnife => &self.knife_view[skin_index],
+            WeaponId::ReferenceKnife => &self.reference_knife_view[skin_index],
+            WeaponId::Karambit => &self.karambit_view[skin_index],
+            other => self.world(other),
+        }
+    }
+
     pub fn world(&self, id: WeaponId) -> &Handle<Gltf> {
         self.worlds.get(&id).unwrap_or(&self.gun)
     }
@@ -86,6 +101,7 @@ impl GameAssets {
             .chain(self.arms.iter())
             .chain(self.knife_view.iter())
             .chain(self.reference_knife_view.iter())
+            .chain(self.karambit_view.iter())
             .chain([&self.gun, &self.knife_world, &self.reference_knife_world])
             .chain(self.knife_poses.iter())
             .chain(self.worlds.values())
@@ -97,6 +113,7 @@ impl GameAssets {
             .chain(self.arms.iter())
             .chain(self.knife_view.iter())
             .chain(self.reference_knife_view.iter())
+            .chain(self.karambit_view.iter())
             .chain([&self.gun, &self.knife_world, &self.reference_knife_world])
             .chain(self.knife_poses.iter())
             .chain(self.worlds.values())

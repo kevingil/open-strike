@@ -92,6 +92,7 @@ catalog viewmodel transform.
 | `tools/export_viewmodels.py` | Rebuild first-person rifle and knife variants after the base exports. |
 | `tools/export_rifle_view.py` | Rebuild only the first-person AK variants. |
 | `tools/export_reference_knife.py` | Rebuild both knife choices and reference knife icons. |
+| `tools/export_karambit_view.py` | Rebuild karambit first-person team variants: right-hand reverse grip, ring-flip draw, idle and slash. Requires the generated catalog karambit. |
 | `tools/inspect_assets.py` | Inspect generated model and animation contracts. |
 | `tools/generate_sounds.py` | Regenerate the bundled procedural sound effects. |
 | `tools/index_sounds.py` | Index optional local WAV recordings. |

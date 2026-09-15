@@ -92,38 +92,26 @@ pub fn simulate_weapons(
                 if previous > KNIFE.recovery && weapon.knife_remaining <= KNIFE.recovery {
                     let rotation = Quat::from_euler(EulerRot::YXZ, input.yaw, input.pitch, 0.0);
                     let origin = transform.translation + Vec3::Y * (controller.height * 0.5 - 0.15);
-                    let predicate = |hit: Entity| {
-                        if hit == entity {
-                            return false;
-                        }
-                        if let Ok(zone) = zones.get(hit) {
-                            return zone.player_entity != entity
-                                && living.iter().any(|(e, _, _)| *e == zone.player_entity);
-                        }
-                        !living.iter().any(|(e, _, _)| *e == hit)
-                    };
-                    if let Some((hit, _)) = physics.cast_ray(
+                    // Melee strikes the solid player body from every side.
+                    // Bullet-zone sensors sit inside that body and can miss
+                    // visible shoulder/back contact. Level solids still block
+                    // the sweep, and only the nearest body can take this hit.
+                    if let Some((hit, _)) = physics.cast_shape(
                         origin,
+                        Quat::IDENTITY,
                         rotation * -Vec3::Z,
-                        KNIFE.range,
-                        true,
+                        &Collider::ball(KNIFE.sweep_radius),
+                        ShapeCastOptions::with_max_time_of_impact(KNIFE.range - KNIFE.sweep_radius),
                         QueryFilter::default()
+                            .exclude_sensors()
                             .exclude_rigid_body(entity)
-                            .predicate(&predicate),
+                            .exclude_collider(entity),
                     ) {
-                        if let Ok(zone) = zones.get(hit) {
-                            if living.iter().any(|(e, team, protection)| {
-                                *e == zone.player_entity
-                                    && hostile(&config.mode, *team, actor.team)
-                                    && *protection <= 0.0
-                            }) {
-                                damage.push((
-                                    entity,
-                                    zone.player_entity,
-                                    KNIFE.damage,
-                                    weapon.active,
-                                    false,
-                                ));
+                        if let Some((_, team, protection)) =
+                            living.iter().find(|(e, _, _)| *e == hit)
+                        {
+                            if hostile(&config.mode, *team, actor.team) && *protection <= 0.0 {
+                                damage.push((entity, hit, KNIFE.damage, weapon.active, false));
                             }
                         } else if targets.contains(hit) {
                             commands.entity(hit).insert(DeadTarget);
