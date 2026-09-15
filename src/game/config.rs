@@ -327,7 +327,10 @@ impl WeaponId {
     }
 
     pub fn has_viewmodel(self) -> bool {
-        matches!(self, Self::AK47 | Self::DefaultKnife | Self::ReferenceKnife)
+        matches!(
+            self,
+            Self::AK47 | Self::DefaultKnife | Self::ReferenceKnife | Self::Karambit
+        )
     }
 
     pub fn name(self) -> &'static str {
