@@ -110,8 +110,13 @@ fn profile(id: WeaponId) -> Transform {
     if id.is_knife() && id.has_viewmodel() {
         // Native reference centimetres, viewed from (0, 10, 32) in Blender.
         let tilt = Quat::from_rotation_x((13.0_f32 / 40.0).atan());
+        let mut translation = tilt * Vec3::new(0.0, -0.32, -0.10) + Vec3::Y * 0.075;
+        if id == WeaponId::Karambit {
+            // Lower both arms together by 20% of the existing downward offset.
+            translation.y *= 1.20;
+        }
         Transform {
-            translation: tilt * Vec3::new(0.0, -0.32, -0.10) + Vec3::Y * 0.075,
+            translation,
             rotation: tilt * Quat::from_rotation_y(std::f32::consts::PI),
             scale: Vec3::splat(0.01),
         }
@@ -151,12 +156,7 @@ pub fn spawn(
     };
     let mut roots = Vec::new();
     for weapon_id in WeaponId::all() {
-        let handle = match weapon_id {
-            WeaponId::AK47 => &assets.arms[skin_index],
-            WeaponId::DefaultKnife => &assets.knife_view[skin_index],
-            WeaponId::ReferenceKnife => &assets.reference_knife_view[skin_index],
-            other => assets.world(other),
-        };
+        let handle = assets.view(weapon_id, skin_index);
         let framing = profile(weapon_id);
         roots.push(
             commands
@@ -264,7 +264,9 @@ pub fn bind_scenes(
                 let wanted = WeaponId::ALL
                     .into_iter()
                     .filter(|weapon_id| showcase.is_none() || *weapon_id == WeaponId::AK47);
-                if wanted.clone().any(|weapon_id| gltfs.get(assets.world(weapon_id)).is_none())
+                if wanted
+                    .clone()
+                    .any(|weapon_id| gltfs.get(assets.world(weapon_id)).is_none())
                 {
                     break;
                 }
@@ -275,11 +277,18 @@ pub fn bind_scenes(
                     };
                     commands.entity(entity).with_child((
                         SceneRoot(asset.scenes[0].clone()),
-                        Transform::from_scale(Vec3::splat(if weapon_id.has_viewmodel() {
-                            100.0
-                        } else {
-                            1.0
-                        })),
+                        // Only the legacy world exports use centimetre sockets.
+                        // A dedicated first-person rig does not change world units.
+                        Transform::from_scale(Vec3::splat(
+                            if matches!(
+                                weapon_id,
+                                WeaponId::AK47 | WeaponId::DefaultKnife | WeaponId::ReferenceKnife
+                            ) {
+                                100.0
+                            } else {
+                                1.0
+                            },
+                        )),
                         ViewModel {
                             actor: model.map(|m| m.logical_entity).unwrap_or(character),
                             weapon_id,
@@ -322,11 +331,10 @@ pub fn bind_scenes(
             }
             continue;
         }
-        let handle = match (model.weapon_id, model.first_person) {
-            (WeaponId::AK47, true) => &assets.arms[model.skin_index],
-            (WeaponId::DefaultKnife, true) => &assets.knife_view[model.skin_index],
-            (WeaponId::ReferenceKnife, true) => &assets.reference_knife_view[model.skin_index],
-            (id, _) => assets.world(id),
+        let handle = if model.first_person {
+            assets.view(model.weapon_id, model.skin_index)
+        } else {
+            assets.world(model.weapon_id)
         };
         let Some(gltf) = gltfs.get(handle) else {
             continue;
