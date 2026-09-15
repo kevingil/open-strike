@@ -35,6 +35,10 @@ Jump into team deathmatch: fight alongside your squad, rack up kills, and get ba
 
 ![First-person team deathmatch on Dust 2 in Open Strike](docs/screenshots/gameplay-dust2.png)
 
+The karambit has its own first-person grip and draw animation.
+
+![First-person karambit grip with both hands visible on Dust 2](docs/screenshots/karambit-dust2.png)
+
 ## Run and contribute
 
 ```sh
