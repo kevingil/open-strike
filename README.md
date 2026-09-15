@@ -1,9 +1,42 @@
 # Open Strike
 
-An open-source tactical FPS inspired by Counter-Strike
+An open-source tactical FPS inspired by Counter-Strike.
 
+[Quick start](#quick-start) · [Screenshots](#screenshots) · [Host a local hub](#host-a-local-hub) · [Development](#development) · [License](#license)
 
-## A look at the game
+## Quick start
+
+### Start the hub and match server
+
+```sh
+tools/run-stack.sh --detach
+```
+
+This builds and starts both servers in the background. If you already run them with Docker, skip this step.
+
+### Launch the game
+
+Connect to the hub with a custom audio pack:
+
+```sh
+OPEN_STRIKE_AUDIO_PACK=assets/audio/local/catalog.ron \
+STRIKE_HUB_URL=http://127.0.0.1:7777 \
+cargo run --locked --bin open-strike
+```
+
+Replace the hub URL with your server's address, or [start a local hub](#host-a-local-hub).
+
+Use `assets/audio/csgo/catalog.ron` for the private CS:GO pack, or `assets/audio/generated/catalog.ron` for generated audio. Without an explicit audio pack, the local catalog loads automatically when present, with generated audio as the default.
+
+The client runs on the host and needs a native GPU window. Local play works without a hub; accounts, friends, and online matches use `STRIKE_HUB_URL`.
+
+For local play with the default audio configuration:
+
+```sh
+cargo run --locked --bin open-strike
+```
+
+## Screenshots
 
 ### Menu
 
@@ -39,60 +72,33 @@ The karambit has its own first-person grip and draw animation.
 
 ![First-person karambit grip with both hands visible on Dust 2](docs/screenshots/karambit-dust2.png)
 
-## Run and contribute
+## Host a local hub
+
+`strike-hub` handles accounts, friends, presence, and the match registry. Its interface is the game's sidebar.
+
+### Docker
+
+Start the hub and a Dust 2 team deathmatch server:
 
 ```sh
-# Regular (generated audio; local catalog loads automatically if present)
-cargo run --locked --bin open-strike
-
-# Load local audio files
-OPEN_STRIKE_AUDIO_PACK=assets/audio/local/catalog.ron cargo run --locked --bin open-strike
-```
-
-Use `OPEN_STRIKE_AUDIO_PACK=assets/audio/csgo/catalog.ron` for the private CS:GO pack.
-
-### Local hub (online play and accounts)
-
-`strike-hub` is the social server: accounts, friends, presence, and the match registry. There is no web dashboard; everything is in the client's sidebar.
-
-```sh
-# Hub + match server (restart either with `docker compose restart`)
 docker compose up --build
-
-# Client stays on the host — it needs a native GPU window
-STRIKE_HUB_URL=http://127.0.0.1:7777 cargo run --locked --bin open-strike
 ```
 
-`docker compose up` publishes the hub at `http://127.0.0.1:7777` and a Dust 2 team deathmatch on UDP `27015`. Account data lives in the `hub-data` volume. `docker compose restart` restarts both services; `docker compose down` stops them. Start only the hub with `docker compose up hub` if you just need accounts and friends.
+Docker builds and runs both servers. The hub listens at `http://127.0.0.1:7777`; matches use UDP `27015`. On the host, launch only the game client with the combined command in [Quick start](#quick-start).
 
-To run both listeners in one process tree (the Fly / single-machine layout):
+Account data lives in the `hub-data` volume. Use `docker compose restart` to restart both services, `docker compose down` to stop them, or `docker compose up hub` to start only accounts and friends.
+
+### Alternative: run servers without Docker
+
+Skip this section when using Docker. Choose one of the following native launch methods.
+
+Build and run the hub and match server together:
 
 ```sh
-# Native: hub TCP 7777 + match UDP 27015
 tools/run-stack.sh --detach
-
-# Or one Docker service exposing both ports
-docker compose -f docker-compose.machine.yml up --build
 ```
 
-Point two clients at that hub to exercise accounts, friends, and a join:
-
-```sh
-tools/run-pair.sh          # two windowed clients (host + friend)
-tools/run-pair.sh --api    # same hub flow over HTTP, no GPU
-```
-
-On Fly, one Machine publishes TCP `7777` and UDP `27015`. Allocate a dedicated IPv4 and set `STRIKE_SERVER_HOST` to it so clients receive a reachable advertise address. The match server binds UDP to `fly-global-services` via `STRIKE_SERVER_BIND`.
-
-The first account registered on an empty hub becomes its administrator. Login accepts username or email. To promote a later account:
-
-```sh
-docker compose exec hub ./strike-hub bootstrap-admin <username>
-```
-
-A second client with the same `STRIKE_HUB_URL` can search by username, send friend requests, and join a friend's match. Local play still works if the hub is down.
-
-To run the services on the host instead of Docker:
+Or build the match server and launch the hub manually:
 
 ```sh
 cargo build --locked --bin strike-server
@@ -101,13 +107,43 @@ STRIKE_SERVER_BIN=target/debug/strike-server STRIKE_SERVER_HOST=127.0.0.1 \
 cargo run --locked -p strike-hub
 ```
 
+### Accounts and friends
+
+Login accepts username or email. The first account registered on an empty hub becomes its administrator. To promote another account on the Docker hub:
+
+```sh
+docker compose exec hub ./strike-hub bootstrap-admin <username>
+```
+
+Clients using the same `STRIKE_HUB_URL` can search for each other, send friend requests, and join a friend's match.
+
+### Single-machine deployment
+
+Run both services in one Docker container:
+
+```sh
+docker compose -f docker-compose.machine.yml up --build
+```
+
+On Fly, one Machine publishes TCP `7777` and UDP `27015`. Allocate a dedicated IPv4 and set `STRIKE_SERVER_HOST` to it so clients receive a reachable advertise address. The match server binds UDP to `fly-global-services` via `STRIKE_SERVER_BIND`.
+
+## Development
+
 See the [tools and development guide](tools/README.md) for rebuilding assets, working with audio, and capturing screenshots.
+
+To exercise accounts, friends, and joining a match with two clients:
+
+```sh
+tools/run-pair.sh          # two windowed clients (host + friend)
+tools/run-pair.sh --api    # same hub flow over HTTP, no GPU
+```
 
 ## License
 
 Open Strike's original code and generated default sounds use the [MIT license](LICENSE). Third-party maps, models, animations, and other assets retain their own licenses. See [asset licensing and provenance](ASSET_LICENSES.md) for credits and the remaining review needed before distributing the full game.
 
-### Credits
+<details>
+<summary>Third-party asset credits</summary>
 
 - "Police_ru combat online" (https://skfb.ly/oG86L) by Am I dead? is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
@@ -192,3 +228,5 @@ Open Strike's original code and generated default sounds use the [MIT license](L
 - "Warehouse fbx model" (https://skfb.ly/pEKFT) by mason_roman's helloneighborfangamingmodelworks is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
 - "Mirage CS2 FPS" (https://sketchfab.com/3d-models/mirage-cs2-fps-f48cfa4e304e45a787f238ef8bfa99e5) by frostychaos144 is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+
+</details>
