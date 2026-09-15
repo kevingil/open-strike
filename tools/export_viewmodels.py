@@ -33,3 +33,6 @@ if __name__ == "__main__":
 
     export_views()
     export_world_and_icons()
+    from export_karambit_view import export_views as export_karambit_views
+
+    export_karambit_views()
