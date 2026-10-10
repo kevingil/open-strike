@@ -73,10 +73,11 @@ complete `Group063` assembly, duplicated after normalization. MAC-10's suppresso
 is removed through its declared deform group. `scope=strip` removes only the
 optic parts each source names in `OPTICS`; iron sights and rails stay.
 `paint=black` replaces the SSG 08, P2000 and PP-Bizon skins with one plain black
-finish, and `paint=steel` gives the karambit a steel blade and a lighter black
-handle. First-person light is flat ambient with no reflections, so the blade
-texture carries a baked dull reflection band that follows its curve. Re-run
-`tools/export_karambit_view.py` after re-exporting the karambit.
+finish, and `paint=steel` gives the karambit a brushed satin steel blade with a
+painted grind line, a steel ring and a lighter black handle. Its first-person
+view reflects a soft sky set up in `reflect_karambit_steel`
+(`src/game/weapons/viewmodel.rs`); without it, ambient light leaves the steel
+flat gray. Re-run `tools/export_karambit_view.py` after re-exporting the karambit.
 When adding a source, inspect its assembled pose and side view before declaring
 its orientation; the exporter rejects sources without a profile. Inventory
 previews use the weapon's side view, while world GLBs retain the +Y barrel / -Z
