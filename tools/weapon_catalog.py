@@ -50,7 +50,7 @@ WEAPONS = [
     # knives
     ("knife_ct", "3ae258cee29b44358efec2c7bbe7b59d", "D.U.", "low-poly KM2000", "knife=1"),
     ("knife_t", "5fb333837f1343caa6a0e80a46b68ac1", "lunea", "Tactical Knife", "knife=1"),
-    ("karambit", "dfd7606f189a413681305a39b8841ce8", "Diamonddogkz", "Karambit", "knife=1"),
+    ("karambit", "dfd7606f189a413681305a39b8841ce8", "Diamonddogkz", "Karambit", "knife=1 paint=steel"),
 ]
 
 SILENCER_DONOR = ("dual_berettas", "474cb73931114a669780783c44b5bb88")

@@ -14,6 +14,7 @@ from typing import Optional
 
 import bpy  # ty: ignore[unresolved-import]
 import bmesh  # ty: ignore[unresolved-import]
+import numpy as np  # ty: ignore[unresolved-import]
 from mathutils import Euler, Matrix, Vector  # ty: ignore[unresolved-import]
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,6 +75,9 @@ OPTICS = {
     "mp5sd": ("reddot",),
     "aug": ("aimpoint", "t2", "reddot", "red-dot", "optic", "holo", "acog"),
 }
+# The karambit's blade UV islands all lie ahead of this normalized y; the
+# ring and tang islands lie behind it.
+KARAMBIT_GUARD_Y = 0.02
 LENGTHS = {
     "pistol": 0.22,
     "mid": 0.55,
@@ -262,6 +266,43 @@ def paint_black():
     for obj in meshes():
         obj.data.materials.clear()
         obj.data.materials.append(mat)
+
+
+def paint_steel(guard: float):
+    """Plain steel on the blade ahead of the guard; the rest a lighter black."""
+    for obj in meshes():
+        handle = obj.data.materials[0]
+        blade = handle.copy()
+        blade.name = f"{handle.name} blade"
+        obj.data.materials.append(blade)
+        for polygon in obj.data.polygons:
+            polygon.material_index = 1 if polygon.center.y > guard else 0
+        shader = handle.node_tree.nodes.get("Principled BSDF")
+        color = shader.inputs["Base Color"].links[0].from_node.image
+        # The glTF importer splits metallicRoughness; metallic is its blue channel.
+        split = shader.inputs["Metallic"].links[0].from_node
+        surface = split.inputs[0].links[0].from_node.image
+        if tuple(color.size) != tuple(surface.size):
+            raise ValueError(f"{handle.name}: color and metal maps differ in size")
+        pixels = np.empty(len(color.pixels), np.float32)
+        color.pixels.foreach_get(pixels)
+        metal = np.empty(len(surface.pixels), np.float32)
+        surface.pixels.foreach_get(metal)
+        rgb = pixels.reshape(-1, 4)[:, :3]
+        weight = np.clip((metal[2::4] - 0.2) / 0.4, 0, 1)[:, None]
+        # Keep the blade's own wear and polished edge around a plain steel tone.
+        steel = 0.7 + 0.6 * (rgb - np.median(rgb[weight[:, 0] > 0.5], axis=0))
+        lifted = rgb * 1.5
+        steel_image = color.copy()
+        steel_image.name = f"{color.name} steel"
+        for image, values in (
+            (color, lifted),
+            (steel_image, lifted * (1 - weight) + steel * weight),
+        ):
+            rgb[:] = np.clip(values, 0, 1)
+            image.pixels.foreach_set(pixels)
+        blade_shader = blade.node_tree.nodes.get("Principled BSDF")
+        blade_shader.inputs["Base Color"].links[0].from_node.image = steel_image
 
 
 def named(obj, *needles):
@@ -560,6 +601,8 @@ def build(key: str, notes: str, path: Optional[Path]):
         if "dual=1" in notes:
             strip_named("silencer", "suppress", "gemtech", "aurora")
         normalize(key, kind)
+        if "paint=steel" in notes:
+            paint_steel(KARAMBIT_GUARD_Y)
         if "dual=1" in notes:
             duplicate_akimbo()
         if "silencer=add" in notes:
