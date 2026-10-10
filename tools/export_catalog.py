@@ -66,6 +66,14 @@ SOURCE_ROTATIONS = {
     "knife_t": (90, 0, 0),
     "karambit": (0, 0, 0),
 }
+# Optic part names for each scope=strip source. The R8's iron sights are
+# named base_scope*, and "t2" would also take the MP7's Picatiny_left2 rail.
+OPTICS = {
+    "r8": ("_scope_0",),
+    "mp7": ("eotech",),
+    "mp5sd": ("reddot",),
+    "aug": ("aimpoint", "t2", "reddot", "red-dot", "optic", "holo", "acog"),
+}
 LENGTHS = {
     "pistol": 0.22,
     "mid": 0.55,
@@ -546,7 +554,7 @@ def build(key: str, notes: str, path: Optional[Path]):
         if "silencer=strip" in notes:
             strip_named("silencer", "suppress", "sionics", "can")
         if "scope=strip" in notes:
-            strip_named("aimpoint", "t2", "reddot", "red-dot", "optic", "holo", "acog")
+            strip_named(*OPTICS[key])
         if "paint=black" in notes:
             paint_black()
         if "dual=1" in notes:
