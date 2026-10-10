@@ -426,6 +426,7 @@ impl Plugin for WeaponPlugin {
                     viewmodel::animate_viewmodel.run_if(in_state(GameState::Playing)),
                     viewmodel::animate_flashes,
                     viewmodel::frame_camera,
+                    viewmodel::reflect_karambit_steel,
                 )
                     .chain(),
             )

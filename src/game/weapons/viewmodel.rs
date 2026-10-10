@@ -6,10 +6,15 @@ use crate::game::{
     player::{player::PlayerEntity, player_model::PlayerModel, skins::SkinId},
 };
 use bevy::{
+    asset::RenderAssetUsages,
+    color::ColorToPacked,
     core_pipeline::tonemapping::Tonemapping,
     prelude::*,
     render::{
         camera::{ClearColorConfig, Exposure},
+        render_resource::{
+            Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension,
+        },
         view::RenderLayers,
     },
 };
@@ -570,4 +575,98 @@ pub fn frame_camera(
             };
         }
     }
+}
+
+/// Karambit sky brightness relative to the map's ambient light.
+const KARAMBIT_SKY_GAIN: f32 = 5.0;
+
+/// Ambient light alone renders the karambit's satin steel flat gray, so it
+/// reflects a soft sky locked to the view camera and shaped around its held pose.
+pub fn reflect_karambit_steel(
+    mut commands: Commands,
+    weapons: Query<&WeaponState>,
+    ambient: Res<AmbientLight>,
+    mut cameras: Query<(Entity, &ViewModelCamera, Option<&mut EnvironmentMapLight>)>,
+    mut images: ResMut<Assets<Image>>,
+    mut sky: Local<Option<EnvironmentMapLight>>,
+) {
+    for (entity, camera, reflection) in &mut cameras {
+        let karambit = weapons
+            .get(camera.actor)
+            .is_ok_and(|weapon| weapon.active == WeaponId::Karambit);
+        let intensity = if karambit {
+            ambient.brightness * KARAMBIT_SKY_GAIN
+        } else {
+            0.0
+        };
+        match reflection {
+            Some(mut reflection) => reflection.intensity = intensity,
+            None => {
+                let sky = sky.get_or_insert_with(|| karambit_sky(&mut images)).clone();
+                commands
+                    .entity(entity)
+                    .insert(EnvironmentMapLight { intensity, ..sky });
+            }
+        }
+    }
+}
+
+fn karambit_sky(images: &mut Assets<Image>) -> EnvironmentMapLight {
+    const SIZE: u32 = 32;
+    let mut cube = |size: u32, data: Vec<u8>| {
+        let mut image = Image::new(
+            Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 6,
+            },
+            TextureDimension::D2,
+            data,
+            TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::RENDER_WORLD,
+        );
+        image.texture_view_descriptor = Some(TextureViewDescriptor {
+            dimension: Some(TextureViewDimension::Cube),
+            ..default()
+        });
+        images.add(image)
+    };
+    let mut data = Vec::with_capacity((SIZE * SIZE * 6 * 4) as usize);
+    for face in 0..6 {
+        for row in 0..SIZE {
+            for column in 0..SIZE {
+                let s = (column as f32 + 0.5) / SIZE as f32 * 2.0 - 1.0;
+                let t = (row as f32 + 0.5) / SIZE as f32 * 2.0 - 1.0;
+                // Cubemap face axes, with z flipped the way Bevy samples them.
+                let direction = match face {
+                    0 => Vec3::new(1.0, -t, s),
+                    1 => Vec3::new(-1.0, -t, -s),
+                    2 => Vec3::new(s, 1.0, -t),
+                    3 => Vec3::new(s, -1.0, t),
+                    4 => Vec3::new(s, -t, -1.0),
+                    _ => Vec3::new(-s, -t, 1.0),
+                }
+                .normalize();
+                data.extend_from_slice(&Srgba::from(sky_radiance(direction)).to_u8_array());
+            }
+        }
+    }
+    let specular_map = cube(SIZE, data);
+    let diffuse_map = cube(1, [0, 0, 0, 255].repeat(6));
+    EnvironmentMapLight {
+        diffuse_map,
+        specular_map,
+        ..default()
+    }
+}
+
+fn sky_radiance(direction: Vec3) -> LinearRgba {
+    // The held blade's flat reflects up and to the right while the backs of
+    // the gloves reflect up and to the left, so a soft panel there over a dim
+    // surround brightens the steel without lifting the gloves.
+    let panel = Vec3::new(0.8, 1.0, 0.0).normalize();
+    let t = ((direction.dot(panel) - 0.7) / 0.22).clamp(0.0, 1.0);
+    let surround = 0.05 + 0.04 * direction.y.max(0.0);
+    let level = surround + (1.0 - surround) * t * t * (3.0 - 2.0 * t);
+    LinearRgba::rgb(0.97 * level, 0.99 * level, level)
 }
