@@ -76,8 +76,9 @@ OPTICS = {
     "aug": ("aimpoint", "t2", "reddot", "red-dot", "optic", "holo", "acog"),
 }
 # The karambit's blade UV islands all lie ahead of this normalized y; the
-# ring and tang islands lie behind it.
+# ring and tang islands lie behind it, and only the ring behind the second.
 KARAMBIT_GUARD_Y = 0.02
+KARAMBIT_RING_Y = -0.085
 LENGTHS = {
     "pistol": 0.22,
     "mid": 0.55,
@@ -311,8 +312,8 @@ def texel_positions(obj, size, faces) -> np.ndarray:
     return out.reshape(-1, 3)
 
 
-def blade_reflection(positions: np.ndarray, blade: np.ndarray) -> np.ndarray:
-    """Brightness of a soft reflected band that follows a curved blade."""
+def blade_coordinates(positions: np.ndarray, blade: np.ndarray):
+    """Each texel's place across (edge 0, spine 1) and along (tip 0, guard 1) the blade."""
     yz = np.nan_to_num(positions[:, 1:])
     points = yz[blade]
     arc = np.linalg.lstsq(
@@ -334,19 +335,33 @@ def blade_reflection(positions: np.ndarray, blade: np.ndarray) -> np.ndarray:
     outer = np.polyval(np.polyfit(middle[known], outer[known], 3), angle)
     across = np.clip((radius - inner) / np.maximum(outer - inner, 1e-6), 0, 1)
     along = np.clip((angle - bins[0]) / (bins[-1] - bins[0]), 0, 1)
-    band = np.exp(-(((across - 0.6) / 0.25) ** 2)) * (0.5 + 0.5 * np.sin(np.pi * along))
-    return np.where(np.isnan(positions[:, 0]), 1.0, 0.65 + 0.65 * band)
+    return across, along
 
 
-def paint_steel(guard: float):
-    """Plain steel on the blade ahead of the guard; the rest a lighter black."""
+def satin_blade(across: np.ndarray, along: np.ndarray):
+    """Brushed satin tone with a crisp grind line, and the brushing grain itself."""
+    rng = np.random.default_rng(3)
+    fine = np.interp(across * 140, np.arange(141), rng.standard_normal(141))
+    broad = np.interp(across * 24, np.arange(25), rng.standard_normal(25))
+    grain = fine * (0.8 + 0.2 * np.interp(along * 9, np.arange(10), rng.random(10)))
+    grain += 0.5 * broad
+    # The bevel is a little under half the blade, rising from the edge at the guard.
+    grind = 0.42 * np.sqrt(np.clip((1 - along) / 0.15, 0, 1))
+    bevel = np.clip((grind - across) / 0.012 + 0.5, 0, 1)
+    return 0.64 + 0.26 * bevel + 0.025 * grain, grain
+
+
+def paint_steel(guard: float, ring: float):
+    """Brushed satin steel on the blade and ring; the rest a lighter black."""
     for obj in meshes():
         handle = obj.data.materials[0]
         blade = handle.copy()
         blade.name = f"{handle.name} blade"
         obj.data.materials.append(blade)
-        ahead = [polygon.center.y > guard for polygon in obj.data.polygons]
-        obj.data.polygons.foreach_set("material_index", np.array(ahead, np.int32))
+        polygons = obj.data.polygons
+        ahead = [polygon.center.y > guard for polygon in polygons]
+        behind = [polygon.center.y < ring for polygon in polygons]
+        polygons.foreach_set("material_index", np.array(ahead, np.int32))
         shader = handle.node_tree.nodes.get("Principled BSDF")
         color = shader.inputs["Base Color"].links[0].from_node.image
         # The glTF importer splits metallicRoughness; metallic is its blue channel.
@@ -359,20 +374,31 @@ def paint_steel(guard: float):
         metal = np.empty(len(surface.pixels), np.float32)
         surface.pixels.foreach_get(metal)
         rgb = pixels.reshape(-1, 4)[:, :3]
-        weight = np.clip((metal[2::4] - 0.2) / 0.4, 0, 1)[:, None]
-        # Keep the blade's own wear and polished edge around a plain steel tone.
-        steel = 0.75 + 0.6 * (rgb - np.median(rgb[weight[:, 0] > 0.5], axis=0))
-        # First-person light is flat ambient, so the blade bakes in a dull reflection.
+        weight = np.clip((metal[2::4] - 0.2) / 0.4, 0, 1)
         positions = texel_positions(obj, color.size, ahead)
-        on_blade = ~np.isnan(positions[:, 0]) & (weight[:, 0] > 0.5)
-        steel *= blade_reflection(positions, on_blade)[:, None]
+        on_blade = ~np.isnan(positions[:, 0])
+        on_ring = ~np.isnan(texel_positions(obj, color.size, behind)[:, 0])
+        blade_metal = on_blade & (weight > 0.5)
+        tone, grain = satin_blade(*blade_coordinates(positions, blade_metal))
+        # Keep the source's wear and polished edge as faint detail in the steel.
+        detail = 0.3 * (rgb - np.median(rgb[blade_metal], axis=0))
+        tint = np.array([0.98, 0.99, 1.0])
+        blade_steel = (tone[:, None] + detail) * tint
+        ring_steel = (0.76 + detail) * tint
+        # Bare steel is fully metallic; the brushing also streaks roughness (green).
+        bare = weight * (on_blade | on_ring)
+        metal[1::4] += (0.3 + 0.04 * grain - metal[1::4]) * bare
+        metal[2::4] += (1.0 - metal[2::4]) * bare
+        surface.pixels.foreach_set(metal)
         # The dim first-person knife light needs a strong lift to read lighter.
         lifted = rgb * 2.0
         steel_image = color.copy()
         steel_image.name = f"{color.name} steel"
+        blade_weight = weight[:, None]
+        ring_weight = (weight * on_ring)[:, None]
         for image, values in (
-            (color, lifted),
-            (steel_image, lifted * (1 - weight) + steel * weight),
+            (color, lifted * (1 - ring_weight) + ring_steel * ring_weight),
+            (steel_image, lifted * (1 - blade_weight) + blade_steel * blade_weight),
         ):
             rgb[:] = np.clip(values, 0, 1)
             image.pixels.foreach_set(pixels)
@@ -677,7 +703,7 @@ def build(key: str, notes: str, path: Optional[Path]):
             strip_named("silencer", "suppress", "gemtech", "aurora")
         normalize(key, kind)
         if "paint=steel" in notes:
-            paint_steel(KARAMBIT_GUARD_Y)
+            paint_steel(KARAMBIT_GUARD_Y, KARAMBIT_RING_Y)
         if "dual=1" in notes:
             duplicate_akimbo()
         if "silencer=add" in notes:
