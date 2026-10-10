@@ -291,8 +291,9 @@ def paint_steel(guard: float):
         rgb = pixels.reshape(-1, 4)[:, :3]
         weight = np.clip((metal[2::4] - 0.2) / 0.4, 0, 1)[:, None]
         # Keep the blade's own wear and polished edge around a plain steel tone.
-        steel = 0.7 + 0.6 * (rgb - np.median(rgb[weight[:, 0] > 0.5], axis=0))
-        lifted = rgb * 1.5
+        steel = 0.75 + 0.6 * (rgb - np.median(rgb[weight[:, 0] > 0.5], axis=0))
+        # The dim first-person knife light needs a strong lift to read lighter.
+        lifted = rgb * 2.0
         steel_image = color.copy()
         steel_image.name = f"{color.name} steel"
         for image, values in (
