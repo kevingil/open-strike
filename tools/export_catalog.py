@@ -268,6 +268,76 @@ def paint_black():
         obj.data.materials.append(mat)
 
 
+def texel_positions(obj, size, faces) -> np.ndarray:
+    """Object-space position under each texel the chosen faces cover; NaN elsewhere."""
+    width, height = size
+    mesh = obj.data
+    mesh.calc_loop_triangles()
+    uv = np.empty(len(mesh.loops) * 2, np.float32)
+    mesh.uv_layers.active.data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2) * (width, height) - 0.5
+    co = np.empty(len(mesh.vertices) * 3, np.float32)
+    mesh.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    out = np.full((height, width, 3), np.nan, np.float32)
+    last = (width - 1, height - 1)
+    for tri in mesh.loop_triangles:
+        if not faces[tri.polygon_index]:
+            continue
+        (x0, y0), (x1, y1), (x2, y2) = corners = uv[list(tri.loops)]
+        area = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        if abs(area) < 1e-9:
+            continue
+        lo = np.clip(np.floor(corners.min(0)), 0, last).astype(int)
+        hi = np.clip(np.ceil(corners.max(0)), 0, last).astype(int)
+        xs, ys = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1))
+        a = ((y1 - y2) * (xs - x2) + (x2 - x1) * (ys - y2)) / area
+        b = ((y2 - y0) * (xs - x2) + (x0 - x2) * (ys - y2)) / area
+        inside = (a >= -0.02) & (b >= -0.02) & (a + b <= 1.02)
+        weights = np.stack([a[inside], b[inside], 1 - a[inside] - b[inside]], 1)
+        out[ys[inside], xs[inside]] = weights @ co[list(tri.vertices)]
+    # Pad each island so texture filtering at its border never reaches unset texels.
+    for _ in range(6):
+        holes = np.isnan(out[..., 0])
+        total = np.zeros_like(out)
+        count = np.zeros(holes.shape)
+        for shift in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+            moved = np.roll(out, shift, axis=(0, 1))
+            known = ~np.isnan(moved[..., 0])
+            total[known] += moved[known]
+            count[known] += 1
+        fill = holes & (count > 0)
+        out[fill] = total[fill] / count[fill, None]
+    return out.reshape(-1, 3)
+
+
+def blade_reflection(positions: np.ndarray, blade: np.ndarray) -> np.ndarray:
+    """Brightness of a soft reflected band that follows a curved blade."""
+    yz = np.nan_to_num(positions[:, 1:])
+    points = yz[blade]
+    arc = np.linalg.lstsq(
+        np.c_[2 * points, np.ones(len(points))], (points**2).sum(1), rcond=None
+    )[0]
+    offset = yz - arc[:2]
+    radius = np.hypot(offset[:, 0], offset[:, 1])
+    angle = np.arctan2(offset[:, 1], offset[:, 0])
+    # Smoothed edge and spine radii along the arc place each texel across the blade.
+    bins = np.linspace(angle[blade].min(), angle[blade].max(), 25)
+    index = np.clip(np.digitize(angle, bins) - 1, 0, 23)
+    inner = np.full(24, np.inf)
+    outer = np.full(24, -np.inf)
+    np.minimum.at(inner, index[blade], radius[blade])
+    np.maximum.at(outer, index[blade], radius[blade])
+    middle = (bins[:-1] + bins[1:]) / 2
+    known = np.isfinite(inner)
+    inner = np.polyval(np.polyfit(middle[known], inner[known], 3), angle)
+    outer = np.polyval(np.polyfit(middle[known], outer[known], 3), angle)
+    across = np.clip((radius - inner) / np.maximum(outer - inner, 1e-6), 0, 1)
+    along = np.clip((angle - bins[0]) / (bins[-1] - bins[0]), 0, 1)
+    band = np.exp(-(((across - 0.6) / 0.25) ** 2)) * (0.5 + 0.5 * np.sin(np.pi * along))
+    return np.where(np.isnan(positions[:, 0]), 1.0, 0.65 + 0.65 * band)
+
+
 def paint_steel(guard: float):
     """Plain steel on the blade ahead of the guard; the rest a lighter black."""
     for obj in meshes():
@@ -275,8 +345,8 @@ def paint_steel(guard: float):
         blade = handle.copy()
         blade.name = f"{handle.name} blade"
         obj.data.materials.append(blade)
-        for polygon in obj.data.polygons:
-            polygon.material_index = 1 if polygon.center.y > guard else 0
+        ahead = [polygon.center.y > guard for polygon in obj.data.polygons]
+        obj.data.polygons.foreach_set("material_index", np.array(ahead, np.int32))
         shader = handle.node_tree.nodes.get("Principled BSDF")
         color = shader.inputs["Base Color"].links[0].from_node.image
         # The glTF importer splits metallicRoughness; metallic is its blue channel.
@@ -292,6 +362,10 @@ def paint_steel(guard: float):
         weight = np.clip((metal[2::4] - 0.2) / 0.4, 0, 1)[:, None]
         # Keep the blade's own wear and polished edge around a plain steel tone.
         steel = 0.75 + 0.6 * (rgb - np.median(rgb[weight[:, 0] > 0.5], axis=0))
+        # First-person light is flat ambient, so the blade bakes in a dull reflection.
+        positions = texel_positions(obj, color.size, ahead)
+        on_blade = ~np.isnan(positions[:, 0]) & (weight[:, 0] > 0.5)
+        steel *= blade_reflection(positions, on_blade)[:, None]
         # The dim first-person knife light needs a strong lift to read lighter.
         lifted = rgb * 2.0
         steel_image = color.copy()
