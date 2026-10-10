@@ -15,7 +15,7 @@ WEAPONS = [
     # pistols
     ("glock18", "fdd5cdd7b31c49f2b16a868ebdf4a75f", "IVA", "G18", "silencer=keep"),
     ("usps", "972e3643000246e8959a6df509557bcc", "Urpo", "Heckler & Koch USP Pistol", "silencer=add"),
-    ("p2000", "867b41f7121d4b9b88b89cc73017f2d4", "AvnisT", "P2000", ""),
+    ("p2000", "867b41f7121d4b9b88b89cc73017f2d4", "AvnisT", "P2000", "paint=black"),
     ("dual_berettas", "474cb73931114a669780783c44b5bb88", "eNse7en", "Beretta 92G Brigadier Elite II", "silencer=strip dual=1"),
     ("p250", "75f910f1346247179627c2ae54aa9978", "Ulrik Langvandsbråten", "Sig Sauer P250 (Anim)", ""),
     ("tec9", "fed8b9bad25242b8ba7c81d675ff050f", "wallon", "Tec-9", ""),
@@ -30,7 +30,7 @@ WEAPONS = [
     ("mp5sd", "2b96ccb2dc51496e93f41734663bcadf", "WillyG99", "MP5SD (Silenced MP5)", "scope=strip"),
     ("ump45", "53ec6320f1c84960a5d49fa0b7a11480", "Levi Giovani", "UMP-45 (FREE)", ""),
     ("p90", "19b39a4ee12442078c7c79c52118e01f", "commiessar", "P90 Sub Machinegun", ""),
-    ("bizon", "b6c6364131f04be9b5691f323e6d391f", "AvnisT", "PP-19 Bizon | ПП-19 Бизон", ""),
+    ("bizon", "b6c6364131f04be9b5691f323e6d391f", "AvnisT", "PP-19 Bizon | ПП-19 Бизон", "paint=black"),
     ("nova", "8c091501adeb493a997544fee3da50f6", "Beerus", "Shotgun - NOVA", ""),
     ("xm1014", "e0d23db5a8b64ff2980875834b425c4b", "drollShark", "Shotgun Benelli M4", ""),
     ("sawedoff", "806f8327bed34fc3b0e3911d01f0566d", "DJMaesen", "sawnoff animated", ""),
