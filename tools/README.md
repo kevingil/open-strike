@@ -70,11 +70,18 @@ The catalog exporter bakes evaluated meshes without rig helpers or inherited
 parent transforms, and uses explicit source orientations in `SOURCE_ROTATIONS`.
 P250 and MAC-10 use the assembled first animation frame; Dual Berettas use the
 complete `Group063` assembly, duplicated after normalization. MAC-10's suppressor
-is removed through its declared deform group. When adding a source, inspect its
-assembled pose and side view before declaring its orientation; the exporter
-rejects sources without a profile. Inventory previews use the weapon's side
-view, while world GLBs retain the +Y barrel / -Z up convention expected by the
-catalog viewmodel transform.
+is removed through its declared deform group. `scope=strip` removes only the
+optic parts each source names in `OPTICS`; iron sights and rails stay.
+`paint=black` replaces the SSG 08, P2000 and PP-Bizon skins with one plain black
+finish, and `paint=steel` gives the karambit a brushed satin steel blade with a
+painted grind line, a steel ring and a lighter black handle. Its first-person
+view reflects a soft sky set up in `reflect_karambit_steel`
+(`src/game/weapons/viewmodel.rs`); without it, ambient light leaves the steel
+flat gray. Re-run `tools/export_karambit_view.py` after re-exporting the karambit.
+When adding a source, inspect its assembled pose and side view before declaring
+its orientation; the exporter rejects sources without a profile. Inventory
+previews use the weapon's side view, while world GLBs retain the +Y barrel / -Z
+up convention expected by the catalog viewmodel transform.
 
 ### Script guide
 

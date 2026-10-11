@@ -14,6 +14,7 @@ from typing import Optional
 
 import bpy  # ty: ignore[unresolved-import]
 import bmesh  # ty: ignore[unresolved-import]
+import numpy as np  # ty: ignore[unresolved-import]
 from mathutils import Euler, Matrix, Vector  # ty: ignore[unresolved-import]
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +67,18 @@ SOURCE_ROTATIONS = {
     "knife_t": (90, 0, 0),
     "karambit": (0, 0, 0),
 }
+# Optic part names for each scope=strip source. The R8's iron sights are
+# named base_scope*, and "t2" would also take the MP7's Picatiny_left2 rail.
+OPTICS = {
+    "r8": ("_scope_0",),
+    "mp7": ("eotech",),
+    "mp5sd": ("reddot",),
+    "aug": ("aimpoint", "t2", "reddot", "red-dot", "optic", "holo", "acog"),
+}
+# The karambit's blade UV islands all lie ahead of this normalized y; the
+# ring and tang islands lie behind it, and only the ring behind the second.
+KARAMBIT_GUARD_Y = 0.02
+KARAMBIT_RING_Y = -0.085
 LENGTHS = {
     "pistol": 0.22,
     "mid": 0.55,
@@ -254,6 +267,143 @@ def paint_black():
     for obj in meshes():
         obj.data.materials.clear()
         obj.data.materials.append(mat)
+
+
+def texel_positions(obj, size, faces) -> np.ndarray:
+    """Object-space position under each texel the chosen faces cover; NaN elsewhere."""
+    width, height = size
+    mesh = obj.data
+    mesh.calc_loop_triangles()
+    uv = np.empty(len(mesh.loops) * 2, np.float32)
+    mesh.uv_layers.active.data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2) * (width, height) - 0.5
+    co = np.empty(len(mesh.vertices) * 3, np.float32)
+    mesh.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    out = np.full((height, width, 3), np.nan, np.float32)
+    last = (width - 1, height - 1)
+    for tri in mesh.loop_triangles:
+        if not faces[tri.polygon_index]:
+            continue
+        (x0, y0), (x1, y1), (x2, y2) = corners = uv[list(tri.loops)]
+        area = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        if abs(area) < 1e-9:
+            continue
+        lo = np.clip(np.floor(corners.min(0)), 0, last).astype(int)
+        hi = np.clip(np.ceil(corners.max(0)), 0, last).astype(int)
+        xs, ys = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1))
+        a = ((y1 - y2) * (xs - x2) + (x2 - x1) * (ys - y2)) / area
+        b = ((y2 - y0) * (xs - x2) + (x0 - x2) * (ys - y2)) / area
+        inside = (a >= -0.02) & (b >= -0.02) & (a + b <= 1.02)
+        weights = np.stack([a[inside], b[inside], 1 - a[inside] - b[inside]], 1)
+        out[ys[inside], xs[inside]] = weights @ co[list(tri.vertices)]
+    # Pad each island so texture filtering at its border never reaches unset texels.
+    for _ in range(6):
+        holes = np.isnan(out[..., 0])
+        total = np.zeros_like(out)
+        count = np.zeros(holes.shape)
+        for shift in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+            moved = np.roll(out, shift, axis=(0, 1))
+            known = ~np.isnan(moved[..., 0])
+            total[known] += moved[known]
+            count[known] += 1
+        fill = holes & (count > 0)
+        out[fill] = total[fill] / count[fill, None]
+    return out.reshape(-1, 3)
+
+
+def blade_coordinates(positions: np.ndarray, blade: np.ndarray):
+    """Each texel's place across (edge 0, spine 1) and along (tip 0, guard 1) the blade."""
+    yz = np.nan_to_num(positions[:, 1:])
+    points = yz[blade]
+    arc = np.linalg.lstsq(
+        np.c_[2 * points, np.ones(len(points))], (points**2).sum(1), rcond=None
+    )[0]
+    offset = yz - arc[:2]
+    radius = np.hypot(offset[:, 0], offset[:, 1])
+    angle = np.arctan2(offset[:, 1], offset[:, 0])
+    # Smoothed edge and spine radii along the arc place each texel across the blade.
+    bins = np.linspace(angle[blade].min(), angle[blade].max(), 25)
+    index = np.clip(np.digitize(angle, bins) - 1, 0, 23)
+    inner = np.full(24, np.inf)
+    outer = np.full(24, -np.inf)
+    np.minimum.at(inner, index[blade], radius[blade])
+    np.maximum.at(outer, index[blade], radius[blade])
+    middle = (bins[:-1] + bins[1:]) / 2
+    known = np.isfinite(inner)
+    inner = np.polyval(np.polyfit(middle[known], inner[known], 3), angle)
+    outer = np.polyval(np.polyfit(middle[known], outer[known], 3), angle)
+    across = np.clip((radius - inner) / np.maximum(outer - inner, 1e-6), 0, 1)
+    along = np.clip((angle - bins[0]) / (bins[-1] - bins[0]), 0, 1)
+    return across, along
+
+
+def satin_blade(across: np.ndarray, along: np.ndarray):
+    """Brushed satin tone with a crisp grind line, and the brushing grain itself."""
+    rng = np.random.default_rng(3)
+    fine = np.interp(across * 140, np.arange(141), rng.standard_normal(141))
+    broad = np.interp(across * 24, np.arange(25), rng.standard_normal(25))
+    grain = fine * (0.8 + 0.2 * np.interp(along * 9, np.arange(10), rng.random(10)))
+    grain += 0.5 * broad
+    # The bevel is a little under half the blade, rising from the edge at the guard.
+    grind = 0.42 * np.sqrt(np.clip((1 - along) / 0.15, 0, 1))
+    bevel = np.clip((grind - across) / 0.012 + 0.5, 0, 1)
+    return 0.64 + 0.26 * bevel + 0.025 * grain, grain
+
+
+def paint_steel(guard: float, ring: float):
+    """Brushed satin steel on the blade and ring; the rest a lighter black."""
+    for obj in meshes():
+        handle = obj.data.materials[0]
+        blade = handle.copy()
+        blade.name = f"{handle.name} blade"
+        obj.data.materials.append(blade)
+        polygons = obj.data.polygons
+        ahead = [polygon.center.y > guard for polygon in polygons]
+        behind = [polygon.center.y < ring for polygon in polygons]
+        polygons.foreach_set("material_index", np.array(ahead, np.int32))
+        shader = handle.node_tree.nodes.get("Principled BSDF")
+        color = shader.inputs["Base Color"].links[0].from_node.image
+        # The glTF importer splits metallicRoughness; metallic is its blue channel.
+        split = shader.inputs["Metallic"].links[0].from_node
+        surface = split.inputs[0].links[0].from_node.image
+        if tuple(color.size) != tuple(surface.size):
+            raise ValueError(f"{handle.name}: color and metal maps differ in size")
+        pixels = np.empty(len(color.pixels), np.float32)
+        color.pixels.foreach_get(pixels)
+        metal = np.empty(len(surface.pixels), np.float32)
+        surface.pixels.foreach_get(metal)
+        rgb = pixels.reshape(-1, 4)[:, :3]
+        weight = np.clip((metal[2::4] - 0.2) / 0.4, 0, 1)
+        positions = texel_positions(obj, color.size, ahead)
+        on_blade = ~np.isnan(positions[:, 0])
+        on_ring = ~np.isnan(texel_positions(obj, color.size, behind)[:, 0])
+        blade_metal = on_blade & (weight > 0.5)
+        tone, grain = satin_blade(*blade_coordinates(positions, blade_metal))
+        # Keep the source's wear and polished edge as faint detail in the steel.
+        detail = 0.3 * (rgb - np.median(rgb[blade_metal], axis=0))
+        tint = np.array([0.98, 0.99, 1.0])
+        blade_steel = (tone[:, None] + detail) * tint
+        ring_steel = (0.76 + detail) * tint
+        # Bare steel is fully metallic; the brushing also streaks roughness (green).
+        bare = weight * (on_blade | on_ring)
+        metal[1::4] += (0.3 + 0.04 * grain - metal[1::4]) * bare
+        metal[2::4] += (1.0 - metal[2::4]) * bare
+        surface.pixels.foreach_set(metal)
+        # The dim first-person knife light needs a strong lift to read lighter.
+        lifted = rgb * 2.0
+        steel_image = color.copy()
+        steel_image.name = f"{color.name} steel"
+        blade_weight = weight[:, None]
+        ring_weight = (weight * on_ring)[:, None]
+        for image, values in (
+            (color, lifted * (1 - ring_weight) + ring_steel * ring_weight),
+            (steel_image, lifted * (1 - blade_weight) + blade_steel * blade_weight),
+        ):
+            rgb[:] = np.clip(values, 0, 1)
+            image.pixels.foreach_set(pixels)
+        blade_shader = blade.node_tree.nodes.get("Principled BSDF")
+        blade_shader.inputs["Base Color"].links[0].from_node.image = steel_image
 
 
 def named(obj, *needles):
@@ -546,12 +696,14 @@ def build(key: str, notes: str, path: Optional[Path]):
         if "silencer=strip" in notes:
             strip_named("silencer", "suppress", "sionics", "can")
         if "scope=strip" in notes:
-            strip_named("aimpoint", "t2", "reddot", "red-dot", "optic", "holo", "acog")
+            strip_named(*OPTICS[key])
         if "paint=black" in notes:
             paint_black()
         if "dual=1" in notes:
             strip_named("silencer", "suppress", "gemtech", "aurora")
         normalize(key, kind)
+        if "paint=steel" in notes:
+            paint_steel(KARAMBIT_GUARD_Y, KARAMBIT_RING_Y)
         if "dual=1" in notes:
             duplicate_akimbo()
         if "silencer=add" in notes:
